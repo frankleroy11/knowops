@@ -1,6 +1,6 @@
 # KnowOps 企业知识库问答平台
 
-当前阶段：文档入库与语义检索（0.3.0）。支持创建知识库、上传 TXT / Markdown / 文本 PDF、异步解析、BGE-M3 向量化、Milvus 索引、限定知识库的语义检索与失败重试。大模型问答、鉴权、版本更新与发布尚未实现。
+当前阶段：文档入库、语义检索与带引用问答（0.4.0）。支持创建知识库、上传 TXT / Markdown / 文本 PDF、异步解析、BGE-M3 向量化、Milvus 索引、限定知识库的语义检索与失败重试。已接入 Qwen 单轮问答与来源引用；鉴权、版本更新与发布尚未实现。
 
 ## 开发环境
 
@@ -146,3 +146,23 @@ python scripts/check_ingestion.py
 MySQL indexed 状态过滤，重新索引覆盖恢复。模型权重升级应使用新的模型标识/集合。
 
 `python scripts/check_retrieval.py` 对既有演示文档 3 执行真实索引与检索验证，保留索引数据。
+
+### 带来源引用的问答（0.4.0）
+
+本地 `.env` 配置 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`。
+百炼中国内地服务示例：`LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1`，
+`LLM_MODEL=qwen-plus`。其他地域请使用对应 endpoint。密钥不得提交到 Git。
+修改配置后重启 API，或在开发模式下触发代码重载。
+
+`POST /api/v1/chat/ask`：
+
+```json
+{"question":"在家办公如何连接公司内网？","knowledge_base_id":2,"top_k":3}
+```
+
+返回 `answer`、`answerable` 和 `citations`（真实切片正文、文件名、页码及编号）。
+后端校验模型返回的引用编号并映射到检索切片；无资料、模型拒答、引用编号不存在时返回资料不足。
+这能校验引用确实来自检索结果，不能保证每句话都获得正确语义支持，仍需评估回答忠实度。
+资料和用户输入均作为不可信数据处理，系统提示约束模型只依据资料回答；不能宣称完全阻止提示注入。
+当前为单轮、非流式问答，不保存会话；LLM 超时/服务错误返回 503，响应结构错误返回 502。
+Qwen API 会接收问题及所选切片正文，真实私密资料需先明确数据使用要求。
