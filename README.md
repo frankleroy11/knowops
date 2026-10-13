@@ -231,3 +231,9 @@ synthetic-v1 三个知识库。同一批候选分别取 dense 前三、重排前
 
 `fix/citation-completeness` 为每个回答事实增加可核对的原文摘录，后端验证出处并组装引用。
 实际回归暴露了额外拒答，暂不合并main。实现边界和对照见 [逐事实引用报告](docs/citation-completeness.md)。
+
+### 统一问答
+
+页面默认进入“统一问答”，从当前空间全部知识库检索，引用标明所属知识库。
+选择左侧单个知识库可限定检索并管理该库文档。API通过显式`scope=all`启用，
+原来的`knowledge_base_id`请求和单库隔离行为不变。见 [统一问答说明](docs/unified-chat.md)。

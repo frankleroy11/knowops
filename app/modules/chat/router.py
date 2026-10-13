@@ -1,4 +1,5 @@
 from time import perf_counter
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -13,7 +14,8 @@ REFUSAL = "现有知识库资料不足，无法回答这个问题。"
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
-    knowledge_base_id: int = Field(gt=0)
+    knowledge_base_id: int | None = Field(default=None, gt=0)
+    scope: Literal["knowledge_base", "all"] = "knowledge_base"
     top_k: int = Field(default=3, ge=1, le=8)
     rerank: bool = False
     candidate_k: int = Field(default=10, ge=1, le=50)
@@ -24,6 +26,7 @@ class AskRequest(BaseModel):
         Query(
             query=self.question,
             knowledge_base_id=self.knowledge_base_id,
+            scope=self.scope,
             top_k=self.top_k,
             rerank=self.rerank,
             candidate_k=self.candidate_k,
@@ -117,6 +120,7 @@ def ask(body: AskRequest, db: DB):
         Query(
             query=body.question,
             knowledge_base_id=body.knowledge_base_id,
+            scope=body.scope,
             top_k=body.top_k,
             rerank=body.rerank,
             candidate_k=body.candidate_k,
