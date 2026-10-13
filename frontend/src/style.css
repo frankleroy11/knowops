@@ -3,3 +3,20 @@
 .scope-picker{display:flex;align-items:center;gap:12px;font-size:12px;color:#647b6e;margin-top:18px}.scope-picker select{font:inherit;color:#234f43;background:#fff;border:1px solid #dce5df;border-radius:7px;padding:9px;max-width:75%;outline-color:#8dbdac}
 
 .context-option{display:flex;align-items:center;gap:8px;color:#647b6e;font-size:12px;margin-top:14px;flex-wrap:wrap}.context-option input{accent-color:#234f43}.context-option small{font-size:11px;color:#8b998e}
+
+/* --- P1: 登录、角色呈现、用户与成员管理 --- */
+.header-actions{display:flex;gap:10px;align-items:center}
+.header-actions button{font:inherit}
+.document-actions{display:flex;gap:10px;align-items:center}
+.modal.wide{width:820px}
+.modal code{display:block;background:#f2f5f3;border:1px solid #e0e7e1;border-radius:7px;padding:9px 11px;margin:6px 0;word-break:break-all;font-size:12px}
+.inline-form{display:flex;gap:8px;margin:16px 0;flex-wrap:wrap}
+.inline-form input,.inline-form select{font:inherit;color:#234f43;background:#fff;border:1px solid #dce5df;border-radius:7px;padding:9px;flex:1;min-width:120px}
+.inline-form button{flex:0 0 auto}
+.token-callout{border:1px solid #d0e0d4;background:#ecf5ee;border-radius:8px;padding:12px 15px;font-size:12px;color:#3f6a50;margin-bottom:14px}
+.token-callout small{display:block;color:#6b8571;font-size:11px;margin-top:4px}
+.row-actions{display:flex;gap:8px;flex-wrap:wrap}
+.table-wrap select{font:inherit;color:#234f43;background:#fff;border:1px solid #dce5df;border-radius:6px;padding:5px 7px;font-size:12px}
+.table-wrap td small{display:block;color:#8b998e;font-size:10px}
+.badge.ready{background:#e4f0e6;color:#4f7a58}
+.side-bottom .text-button{margin-top:8px;display:block}

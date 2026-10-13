@@ -8,7 +8,7 @@ request fails closed with 401 instead of silently falling back.
 from datetime import datetime
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -75,15 +75,34 @@ def create_user(db: Session, email: str, role: str, display_name: str = "") -> U
     return user
 
 
-def set_user_role(db: Session, email: str, role: str) -> User:
-    if role not in ROLES:
-        raise HTTPException(422, f"角色必须是 {', '.join(ROLES)}")
-    user = db.scalar(select(User).where(User.email == email.strip().lower()))
-    if user is None:
-        raise HTTPException(404, "用户不存在")
-    user.role = role
-    db.commit()
-    return user
+def find_user_by_email(db: Session, email: str) -> User | None:
+    return db.scalar(select(User).where(User.email == email.strip().lower()))
+
+
+def list_users(db: Session) -> list[User]:
+    return list(db.scalars(select(User).order_by(User.id)))
+
+
+def active_token_count(db: Session, user_id: int) -> int:
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(ApiToken)
+            .where(ApiToken.user_id == user_id, ApiToken.revoked_at.is_(None))
+        )
+        or 0
+    )
+
+
+def admin_count(db: Session) -> int:
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(User)
+            .where(User.role == ADMIN, User.is_active.is_(True))
+        )
+        or 0
+    )
 
 
 def issue_token(db: Session, user: User, label: str = "") -> str:
@@ -167,3 +186,84 @@ def require_author(principal: Principal) -> None:
 def require_admin(principal: Principal) -> None:
     if principal.role != ADMIN:
         raise HTTPException(403, "需要管理员权限")
+
+
+def set_user_role(db: Session, user: User, role: str) -> User:
+    if role not in ROLES:
+        raise HTTPException(422, f"角色必须是 {', '.join(ROLES)}")
+    if user.role == ADMIN and role != ADMIN and admin_count(db) <= 1:
+        raise HTTPException(409, "至少保留一个启用的管理员")
+    user.role = role
+    db.commit()
+    return user
+
+
+def set_user_active(db: Session, user: User, is_active: bool) -> User:
+    if not is_active and user.role == ADMIN and admin_count(db) <= 1:
+        raise HTTPException(409, "至少保留一个启用的管理员")
+    user.is_active = is_active
+    db.commit()
+    return user
+
+
+def membership_roles(db: Session, principal: Principal) -> dict[int, str]:
+    """All knowledge-base roles of the caller in one query, for list rendering."""
+    if principal.is_admin or principal.id is None:
+        return {}
+    return {
+        member.kb_id: member.role
+        for member in db.scalars(select(KbMember).where(KbMember.user_id == principal.id))
+    }
+
+
+def kb_role(db: Session, principal: Principal, kb_id: int) -> str | None:
+    """Membership role of the caller ("owner"/"editor"/"viewer"), "admin" for admins."""
+    if principal.is_admin:
+        return ADMIN
+    if principal.id is None:
+        return None
+    member = db.scalar(
+        select(KbMember).where(KbMember.kb_id == kb_id, KbMember.user_id == principal.id)
+    )
+    return member.role if member else None
+
+
+def list_members(db: Session, kb_id: int) -> list[dict]:
+    rows = db.execute(
+        select(KbMember, User)
+        .join(User, KbMember.user_id == User.id)
+        .where(KbMember.kb_id == kb_id)
+        .order_by(KbMember.role, User.id)
+    ).all()
+    return [
+        {
+            "user_id": user.id,
+            "email": user.email,
+            "display_name": user.display_name,
+            "role": member.role,
+        }
+        for member, user in rows
+    ]
+
+
+def owner_count(db: Session, kb_id: int) -> int:
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(KbMember)
+            .where(KbMember.kb_id == kb_id, KbMember.role == "owner")
+        )
+        or 0
+    )
+
+
+def remove_membership(db: Session, kb_id: int, user_id: int) -> None:
+    member = db.scalar(
+        select(KbMember).where(KbMember.kb_id == kb_id, KbMember.user_id == user_id)
+    )
+    if member is None:
+        raise HTTPException(404, "该用户不是此知识库成员")
+    if member.role == "owner" and owner_count(db, kb_id) <= 1:
+        raise HTTPException(409, "知识库至少保留一个 owner")
+    db.delete(member)
+    db.commit()

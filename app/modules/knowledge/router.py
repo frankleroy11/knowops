@@ -1,8 +1,9 @@
 import hashlib
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -18,6 +19,7 @@ from app.workers.celery_app import ingest_document
 
 router = APIRouter(tags=["知识库与文档"])
 MAX_BYTES = 10 * 1024 * 1024
+KB_MEMBER_ROLES = ("owner", "editor", "viewer")
 
 
 class KBCreate(BaseModel):
@@ -28,6 +30,19 @@ class KBCreate(BaseModel):
 class KBOut(KBCreate):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    my_role: str | None = None
+
+
+class MemberIn(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    role: Literal["owner", "editor", "viewer"] = "viewer"
+
+
+class MemberOut(BaseModel):
+    user_id: int
+    email: str
+    display_name: str
+    role: str
 
 
 @router.post("/knowledge-bases", response_model=KBOut, status_code=201)
@@ -44,7 +59,12 @@ def create_kb(body: KBCreate, db: DB, principal: CurrentPrincipal):
         raise HTTPException(409, "知识库名称已存在") from exc
     if principal.id is not None:
         service.ensure_membership(db, kb.id, principal.id, "owner")
-    return kb
+    return {
+        "id": kb.id,
+        "name": kb.name,
+        "description": kb.description,
+        "my_role": "admin" if principal.is_admin else ("owner" if principal.id else None),
+    }
 
 
 @router.get("/knowledge-bases", response_model=list[KBOut])
@@ -52,15 +72,22 @@ def list_kbs(db: DB, principal: CurrentPrincipal, limit: int = 50, offset: int =
     scope = service.authorized_kb_ids(db, principal)
     if not scope:
         return []
-    return list(
-        db.scalars(
+    roles = service.membership_roles(db, principal)
+    return [
+        {
+            "id": kb.id,
+            "name": kb.name,
+            "description": kb.description,
+            "my_role": "admin" if principal.is_admin else roles.get(kb.id),
+        }
+        for kb in db.scalars(
             select(KnowledgeBase)
             .where(KnowledgeBase.id.in_(scope))
             .order_by(KnowledgeBase.id)
             .offset(max(0, offset))
             .limit(min(max(1, limit), 100))
         )
-    )
+    ]
 
 
 def dispatch(version):
@@ -236,3 +263,35 @@ def list_documents(
     kb_id: int, db: DB, principal: CurrentPrincipal, limit: int = 50, offset: int = 0
 ):
     return documents(kb_id, db, limit=limit, offset=offset, principal=principal)
+
+
+@router.get("/knowledge-bases/{kb_id}/members", response_model=list[MemberOut])
+def list_kb_members(kb_id: int, db: DB, principal: CurrentPrincipal):
+    service.require_kb(db, principal, kb_id, "write")
+    return service.list_members(db, kb_id)
+
+
+@router.post("/knowledge-bases/{kb_id}/members", response_model=MemberOut, status_code=201)
+def add_kb_member(kb_id: int, body: MemberIn, db: DB, principal: CurrentPrincipal):
+    service.require_kb(db, principal, kb_id, "write")
+    user = service.find_user_by_email(db, body.email)
+    if user is None:
+        raise HTTPException(404, "用户不存在，请先创建用户")
+    service.ensure_membership(db, kb_id, user.id, body.role)
+    kb = db.get(KnowledgeBase, kb_id)
+    if body.role == "owner" and kb.owner_id is None:
+        kb.owner_id = user.id
+        db.commit()
+    return {
+        "user_id": user.id,
+        "email": user.email,
+        "display_name": user.display_name,
+        "role": body.role,
+    }
+
+
+@router.delete("/knowledge-bases/{kb_id}/members/{user_id}", status_code=204)
+def remove_kb_member(kb_id: int, user_id: int, db: DB, principal: CurrentPrincipal):
+    service.require_kb(db, principal, kb_id, "write")
+    service.remove_membership(db, kb_id, user_id)
+    return Response(status_code=204)

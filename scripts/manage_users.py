@@ -83,7 +83,8 @@ def run(db, args) -> None:
         user = require_user(db, args.email)
         print(f"已吊销 {service.revoke_tokens(db, user)} 个 token")
     elif args.command == "set-role":
-        user = service.set_user_role(db, args.email, args.role)
+        user = require_user(db, args.email)
+        user = service.set_user_role(db, user, args.role)
         print(f"用户 {user.email} 角色已改为 {user.role}")
     elif args.command == "grant-kb":
         user = require_user(db, args.email)
