@@ -55,10 +55,16 @@ class MilvusStore:
     def search(self, vector, kb_id, limit):
         if not self.client.has_collection(self.name):
             return []
+        if isinstance(kb_id, list):
+            if not kb_id:
+                return []
+            expression = "knowledge_base_id in [" + ",".join(str(int(i)) for i in kb_id) + "]"
+        else:
+            expression = f"knowledge_base_id == {int(kb_id)}"
         return self.client.search(
             self.name,
             [vector],
-            filter=f"knowledge_base_id == {int(kb_id)}",
+            filter=expression,
             limit=limit,
             search_params={"metric_type": "COSINE", "params": {"ef": 64}},
         )[0]
