@@ -40,7 +40,7 @@ EVALS = ROOT / "evals"
 DOMAINS = ("it", "hr", "product")
 DOMAIN_LABEL = {"it": "IT 支持", "hr": "人事制度", "product": "产品与客服"}
 SPLIT_CHOICES = ("all", "dev", "test")
-METRIC_VERSION = "evidence-v3"
+METRIC_VERSION = "evidence-v4-dual"
 
 
 def percentile(values, quantile):
@@ -69,7 +69,7 @@ def evaluation_kind(question):
     return "isolation" if "isolation" in question else question["kind"]
 
 
-def evidence_metrics(question, hits):
+def strict_evidence_metrics(question, hits):
     expected = set(question["expected_sources"])
     if not expected:
         return {}
@@ -117,6 +117,32 @@ def evidence_metrics(question, hits):
         "ndcg_at_k": ndcg(gains, len(hits), len(expected)),
         "answer_slice_found": coverage(hits),
     }
+
+
+def evidence_metrics(question, hits):
+    from scripts.evidence_annotations import annotation_for, fact_coverage
+
+    original = strict_evidence_metrics(question, hits)
+    annotation = annotation_for(question, EVALS)
+    if annotation.get("strict_terms_additions"):
+        corrected = strict_evidence_metrics(
+            {**question, "terms": question.get("terms", []) + annotation["strict_terms_additions"]},
+            hits,
+        )
+    else:
+        corrected = original
+    result = dict(original)
+    if question.get("expected_sources"):
+        groups = annotation.get("fact_groups")
+        result["accepted_evidence_complete_at_k"] = (
+            fact_coverage(groups, hits) if groups else corrected.get("evidence_complete_at_k")
+        )
+        result["accepted_evidence_at_1"] = (
+            fact_coverage(groups, hits[:1]) if groups else corrected.get("chunk_recall_at_1")
+        )
+        result["accepted_evidence_label_error"] = corrected.get("evidence_label_error")
+        result["annotation_version"] = "reviewed-alternatives-v1" if annotation else None
+    return result
 
 
 def corpus_files(domain: str) -> list[Path]:
@@ -364,6 +390,7 @@ def summarize(rows: list[dict], skip_chat: bool) -> dict:
     refusal = [r for r in rows if evaluation_kind(r) != "answerable"]
     isolation = [r for r in rows if evaluation_kind(r) == "isolation"]
     evidence_valid = [r for r in answerable if not r.get("evidence_label_error")]
+    accepted_valid = [r for r in answerable if not r.get("accepted_evidence_label_error")]
     successful = [r for r in rows if not r.get("error")]
 
     def rate(group, key):
@@ -383,6 +410,9 @@ def summarize(rows: list[dict], skip_chat: bool) -> dict:
         "isolation_checked_requests": sum("cross_kb_leakage" in r for r in isolation),
         "evidence_evaluable_questions": len(evidence_valid),
         "evidence_label_errors": len(answerable) - len(evidence_valid),
+        "accepted_evidence_evaluable_questions": len(accepted_valid),
+        "accepted_evidence_complete_at_k": rate(accepted_valid, "accepted_evidence_complete_at_k"),
+        "accepted_evidence_at_1": rate(accepted_valid, "accepted_evidence_at_1"),
         "isolation_leakage_rate": rate(isolation, "cross_kb_leakage"),
         "isolation_refusal_accuracy": rate(isolation, "correct_refusal"),
         "evidence_complete_at_k": rate(evidence_valid, "evidence_complete_at_k"),
@@ -540,6 +570,9 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
+    from scripts.evidence_annotations import validate_annotations
+
+    validate_annotations(EVALS)
     raw = questions_path.read_bytes()
     questions = [q for q in json.loads(raw) if args.split == "all" or q["split"] == args.split]
     if not questions:
@@ -555,6 +588,11 @@ def main() -> int:
     metadata = {
         "timestamp": stamp,
         "metric_version": METRIC_VERSION,
+        "evidence_annotations_sha256": hashlib.sha256(
+            (EVALS / "evidence_annotations.json").read_bytes()
+        ).hexdigest()
+        if (EVALS / "evidence_annotations.json").exists()
+        else None,
         "run_label": label,
         "dataset": "knowops-synthetic-enterprise-v1",
         "dataset_name": "星桥科技（虚构）合成语料",

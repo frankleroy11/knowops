@@ -184,3 +184,59 @@ def test_broker_failure_keeps_parsed_result():
     ):
         result = ingest_document.run(9)
         assert result == {"status": "parsed", "index_queued": False}
+
+
+def test_rerank_receives_only_authorized_candidates(sessions):
+    from app.modules.knowledge.router import get_db
+    from app.modules.retrieval import router as retrieval
+
+    with sessions.begin() as db:
+        db.add(
+            VectorIndex(
+                version_id=1, collection=collection_name(), status="indexed", chunks_indexed=1
+            )
+        )
+
+    def database():
+        with sessions() as db:
+            yield db
+
+    class Store:
+        def search(self, vector, kb_id, limit):
+            assert limit == 10
+            return [{"chunk_id": 1, "distance": 0.9}, {"chunk_id": 9999, "distance": 0.8}]
+
+        def close(self):
+            pass
+
+    class Embedder:
+        def encode(self, texts, **kwargs):
+            return [[1.0, 0.0]]
+
+    def rerank(query, hits, top_k, max_per_document):
+        assert len(hits) == 1
+        assert hits[0]["chunk_id"] == 1
+        return [{**hits[0], "rerank_score": 0.95}]
+
+    app.dependency_overrides[get_db] = database
+    try:
+        with (
+            patch.object(retrieval, "MilvusStore", Store),
+            patch.object(retrieval, "get_embedder", return_value=Embedder()),
+            patch("app.adapters.reranker.local.rerank_hits", side_effect=rerank),
+        ):
+            response = TestClient(app).post(
+                "/api/v1/search",
+                json={
+                    "query": "VPN",
+                    "knowledge_base_id": 1,
+                    "rerank": True,
+                    "candidate_k": 10,
+                    "top_k": 3,
+                },
+            )
+            assert response.status_code == 200
+            assert response.json()["reranked"] is True
+            assert response.json()["hits"][0]["score"] == 0.9
+    finally:
+        app.dependency_overrides.clear()

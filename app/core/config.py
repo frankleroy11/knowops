@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     index_batch_size: int = Field(default=64, ge=1, le=256)
     index_max_retries: int = 3
 
+    reranker_model: str = "BAAI/bge-reranker-base"
+    reranker_model_path: str = ""
+    reranker_max_length: int = Field(default=512, ge=32, le=512)
+    reranker_batch_size: int = Field(default=4, ge=1, le=32)
+
     @property
     def milvus_timeout(self) -> float:
         return 10.0

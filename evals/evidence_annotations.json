@@ -1,0 +1,189 @@
+{
+  "version": "reviewed-alternatives-v1",
+  "scope": "six inspected dev regressions plus HR-32 objective annotation completion",
+  "reviewer": "assistant source inspection; human confirmation pending",
+  "changes": {
+    "HR-01": {
+      "domain": "hr",
+      "question": "每个月几号发工资？遇到周末会提前吗？",
+      "review_basis": "发薪说明及员工关系FAQ逐句核对，FAQ提供同一发薪事实。",
+      "fact_groups": [
+        {
+          "fact": "每月15日发薪",
+          "options": [
+            {
+              "source": "薪酬结构与发薪日历说明.md",
+              "quote": "公司发薪日为每月 15 日"
+            },
+            {
+              "source": "薪酬结构与发薪日历说明.md",
+              "quote": "15 日，遇节假日或双休日提前到最近一个工作日。"
+            },
+            {
+              "source": "员工关系与假期常见问题 FAQ.md",
+              "quote": "每月 15 日，遇节假日或双休日提前至最近一个工作日。"
+            }
+          ]
+        },
+        {
+          "fact": "节假日或双休日提前至最近工作日",
+          "options": [
+            {
+              "source": "薪酬结构与发薪日历说明.md",
+              "quote": "发薪日遇法定节假日或双休日的，提前至最近一个工作日发放。"
+            },
+            {
+              "source": "薪酬结构与发薪日历说明.md",
+              "quote": "15 日，遇节假日或双休日提前到最近一个工作日。"
+            },
+            {
+              "source": "员工关系与假期常见问题 FAQ.md",
+              "quote": "每月 15 日，遇节假日或双休日提前至最近一个工作日。"
+            }
+          ]
+        }
+      ]
+    },
+    "HR-03": {
+      "domain": "hr",
+      "question": "婚假有几天？什么时候必须休完？",
+      "review_basis": "婚假天数与休完期限分别作为必需事实；FAQ和假期对照表均明确给出两者。",
+      "fact_groups": [
+        {
+          "fact": "婚假10个自然日",
+          "options": [
+            {
+              "source": "请假与休假管理制度.md",
+              "quote": "可享受婚假 10 个自然日"
+            },
+            {
+              "source": "员工关系与假期常见问题 FAQ.md",
+              "quote": "10 个自然日，须在领取结婚证之日起 12 个月内休完。"
+            },
+            {
+              "source": "请假类型与假期额度对照表.md",
+              "quote": "婚假为 10 个自然日，须在领证之日起 12 个月内休完。"
+            }
+          ]
+        },
+        {
+          "fact": "领证起12个月内休完",
+          "options": [
+            {
+              "source": "请假与休假管理制度.md",
+              "quote": "须在领取结婚证之日起 12 个月内休完"
+            },
+            {
+              "source": "员工关系与假期常见问题 FAQ.md",
+              "quote": "10 个自然日，须在领取结婚证之日起 12 个月内休完。"
+            },
+            {
+              "source": "请假类型与假期额度对照表.md",
+              "quote": "婚假为 10 个自然日，须在领证之日起 12 个月内休完。"
+            }
+          ]
+        }
+      ]
+    },
+    "HR-23": {
+      "domain": "hr",
+      "question": "加班换来的调休多久不用就会作废？",
+      "review_basis": "题目只问有效期，不额外要求未提问的折现规则。",
+      "fact_groups": [
+        {
+          "fact": "调休期限自加班日起6个月",
+          "options": [
+            {
+              "source": "加班与调休管理办法.md",
+              "quote": "调休有效期为自加班发生之日起 6 个月"
+            },
+            {
+              "source": "员工关系与假期常见问题 FAQ.md",
+              "quote": "自加班之日起 6 个月内使用，逾期作废。"
+            }
+          ]
+        }
+      ]
+    },
+    "IT-08": {
+      "domain": "it",
+      "question": "会议室屏幕上显示的投屏码多久会失效？",
+      "review_basis": "同一手册正文和参数列表仅标点不同。",
+      "fact_groups": [
+        {
+          "fact": "投屏码2分钟有效",
+          "options": [
+            {
+              "source": "会议室音视频设备使用手册.md",
+              "quote": "投屏码有效期 2 分钟"
+            },
+            {
+              "source": "会议室音视频设备使用手册.md",
+              "quote": "投屏码有效期：2 分钟"
+            }
+          ]
+        }
+      ]
+    },
+    "IT-12": {
+      "domain": "it",
+      "question": "发邮件时最多能带多大的附件？",
+      "review_basis": "只接受明确含累计/单封范围的25MB口径，不接受单独数字25或容量值；外包特殊限制另外注明。",
+      "fact_groups": [
+        {
+          "fact": "普通员工单封附件累计25MB",
+          "options": [
+            {
+              "source": "企业邮箱使用手册.md",
+              "quote": "单封邮件附件累计大小 | 25 MB"
+            },
+            {
+              "source": "企业邮箱容量与附件限制说明.md",
+              "quote": "单封邮件附件累计不超过 25 MB"
+            },
+            {
+              "source": "企业邮箱容量与附件限制说明.md",
+              "quote": "单封邮件累计 25 MB，外包驻场账号为 10 MB。"
+            }
+          ]
+        }
+      ]
+    },
+    "PD-24": {
+      "domain": "product",
+      "question": "会议室网络需要放通哪些 UDP 端口？",
+      "review_basis": "问题限定UDP端口，不把参考答案中未提问的TCP端口作为必需事实。",
+      "fact_groups": [
+        {
+          "fact": "媒体UDP端口50000至50100",
+          "options": [
+            {
+              "source": "星桥会议音视频质量排查指南.md",
+              "quote": "UDP 50000 至 50100"
+            },
+            {
+              "source": "星桥会议常见问题 FAQ.md",
+              "quote": "TCP 443、TCP 8443 与 UDP 50000 至 50100。"
+            },
+            {
+              "source": "星桥会议版本发布说明 v2.8.md",
+              "quote": "更新防火墙规则放通 UDP 50000 至 50100"
+            },
+            {
+              "source": "星桥会议产品功能手册.md",
+              "quote": "UDP 50000 至 50100"
+            }
+          ]
+        }
+      ]
+    },
+    "HR-32": {
+      "domain": "hr",
+      "question": "试用期员工的绩效考核和转正评估分别怎么安排？",
+      "review_basis": "参考答案包含转正评估启动时间，原terms遗漏该来源中的证据；保留原terms并补充。",
+      "strict_terms_additions": [
+        "试用期届满前 10 个工作日启动转正评估。"
+      ]
+    }
+  }
+}

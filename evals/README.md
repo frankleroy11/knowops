@@ -137,3 +137,19 @@ python scripts/evaluate_v2.py --reuse        # 复用已入库的知识库，跳
 HR-32 有一个标注来源没有对应 terms，单独记录 evidence_label_error。文档级统计仍包含它，
 证据覆盖/MRR/nDCG 暂排除该题并报告 evidence_evaluable_questions；其他 HTTP 失败仍计入分母。
 三组修正基线与失败示例见 docs/retrieval-baseline-corrected.md。
+
+## 等价证据补充（reviewed-alternatives-v1）
+
+`evidence_annotations.json` 保存独立的逐题补充，不改写原 questions.json、facts 或 manifest。
+当前包含六道已诊断 dev 题的等价证据组，以及 HR-32 的客观证据遗漏补充。
+每个必需事实都要匹配一个允许来源中的完整片段，多个事实可以分别由不同切片支持。
+标注由助手对照原文复核，仍待独立人工确认；不是模型自动生成金标准。
+
+评估同时返回原始 `evidence_complete_at_k` 和补充口径 `accepted_evidence_complete_at_k`，
+HR-32 原始标注缺口仍保留于旧指标，新指标使用补充后的证据判定。
+新增口径不自动将任意相似文件视为正确来源；它只接受逐条列出的来源/片段。
+未来修改问题或来源时，必须重新核验补充标注。运行时校验 question/domain 一致及 quote 存在。
+
+`python scripts/rescore_evidence.py` 仅对存档 dev 候选和分数重算指标，不发起检索或大模型调用。
+结果位于 annotation_runs/，解释与修改依据见 docs/evidence-annotation-review.md。
+本次已诊断过的六题不是独立盲测集，不能将修正后的增益解释为泛化能力提升。

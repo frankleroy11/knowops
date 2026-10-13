@@ -1,7 +1,7 @@
 from time import perf_counter
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.adapters.llm.qwen import LLMUnavailable, generate_grounded_answer
 from app.modules.knowledge.router import DB
@@ -15,6 +15,21 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     knowledge_base_id: int = Field(gt=0)
     top_k: int = Field(default=3, ge=1, le=8)
+    rerank: bool = False
+    candidate_k: int = Field(default=10, ge=1, le=50)
+    max_per_document: int = Field(default=0, ge=0, le=50)
+
+    @model_validator(mode="after")
+    def validate_retrieval(self):
+        Query(
+            query=self.question,
+            knowledge_base_id=self.knowledge_base_id,
+            top_k=self.top_k,
+            rerank=self.rerank,
+            candidate_k=self.candidate_k,
+            max_per_document=self.max_per_document,
+        )
+        return self
 
 
 class ModelAnswer(BaseModel):
@@ -53,7 +68,15 @@ def ask(body: AskRequest, db: DB):
         raise HTTPException(422, "问题不能为空")
     started = perf_counter()
     result = search(
-        Query(query=body.question, knowledge_base_id=body.knowledge_base_id, top_k=body.top_k), db
+        Query(
+            query=body.question,
+            knowledge_base_id=body.knowledge_base_id,
+            top_k=body.top_k,
+            rerank=body.rerank,
+            candidate_k=body.candidate_k,
+            max_per_document=body.max_per_document,
+        ),
+        db,
     )
     retrieved = perf_counter()
     answer = answer_question(body, result["hits"])

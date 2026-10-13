@@ -202,3 +202,21 @@ python scripts/evaluate_v2.py --reuse --top-k 5   # 复用已入库数据做参�
 数据集构成、标注校验规则、真实评估结果与已知局限见 `docs/dataset-verification.md`；
 指标口径与局限见 `evals/README.md`。旧版 30 题数据集与基线 run 保留在 `evals/legacy/`。
 `/chat/ask` 额外返回 `timings_ms`，便于区分检索与生成耗时。
+
+### 可选重排序（实验）
+
+`/search` 和 `/chat/ask` 默认 `rerank=false`，现有页面继续使用原检索方案。
+请求中设置 `rerank=true, candidate_k=10, top_k=3`，先召回 10 条再由本地
+BAAI/bge-reranker-base 重排返回 3 条。`max_per_document=2` 可限制同文档切片数量（软限制，
+不足 3 条时以剩余候选补齐），默认 0 不限制。候选数必须大于等于返回数。
+Milvus COSINE `score` 保留；重排分数单独返回 `rerank_score`，两者不能直接比较。
+模型懒加载，Apple Silicon 优先 MPS；首次请求包含模型加载耗时，模型不可用时返回 503。
+重排输入最多 512 token，超出部分会截断，需通过评估检查长切片的信息损失。
+
+运行 `python scripts/evaluate_reranker.py`，只在 dev 集执行检索对照，不调用 Qwen，复用
+synthetic-v1 三个知识库。同一批候选分别取 dense 前三、重排前三、带文档软限制的重排前三。
+结果位于 `evals/reranker_runs/`。记录独立重排耗时与共享召回耗时，不把模型下载与初始化计入稳态统计。
+
+评估现已支持等价证据补充标注（`evals/evidence_annotations.json`）。原指定来源指标与
+补充标注指标分别保留，修改理由和候选重评分结果见 `docs/evidence-annotation-review.md`。
+生产问答仍默认使用 dense 检索；新口径下重排的开发集收益尚待新的盲测与生成质量验证。

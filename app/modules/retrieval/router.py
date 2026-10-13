@@ -1,7 +1,7 @@
 import logging
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 
 from app.adapters.embeddings.local import get_embedder
@@ -22,6 +22,17 @@ class Query(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     knowledge_base_id: int = Field(gt=0)
     top_k: int = Field(default=5, ge=1, le=50)
+    rerank: bool = False
+    candidate_k: int = Field(default=10, ge=1, le=50)
+    max_per_document: int = Field(default=0, ge=0, le=50)
+
+    @model_validator(mode="after")
+    def validate_candidates(self):
+        if self.rerank and self.candidate_k < self.top_k:
+            raise ValueError("重排序候选数不能小于 top_k")
+        if self.max_per_document and not self.rerank:
+            raise ValueError("文档多样性仅用于重排序")
+        return self
 
 
 @router.post("/document-versions/{version_id}/index", status_code=202)
@@ -68,7 +79,9 @@ def search(body: Query, db: DB):
     try:
         vector = get_embedder().encode([body.query], is_query=True)[0]
         store = MilvusStore()
-        hits = store.search(vector, body.knowledge_base_id, body.top_k)
+        hits = store.search(
+            vector, body.knowledge_base_id, body.candidate_k if body.rerank else body.top_k
+        )
         results = []
         for hit in hits:
             row = db.execute(
@@ -98,7 +111,16 @@ def search(body: Query, db: DB):
                         "content": chunk.content,
                     }
                 )
-        return {"query": body.query, "collection": collection_name(), "hits": results}
+        if body.rerank:
+            from app.adapters.reranker.local import rerank_hits
+
+            results = rerank_hits(body.query, results, body.top_k, body.max_per_document)
+        return {
+            "query": body.query,
+            "collection": collection_name(),
+            "reranked": body.rerank,
+            "hits": results,
+        }
     except Exception:
         logging.getLogger(__name__).exception("Semantic search failed")
         raise HTTPException(503, "检索不可用：请检查模型及 Milvus 服务") from None
