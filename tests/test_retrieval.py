@@ -135,3 +135,52 @@ def test_search_resolves_custom_primary_key_and_filters_kb(sessions):
             assert response.json()["hits"] == []
     finally:
         app.dependency_overrides.clear()
+
+
+def test_document_list_includes_independent_index_state(sessions):
+    from app.modules.knowledge.router import documents
+
+    with sessions.begin() as db:
+        db.add(
+            VectorIndex(
+                version_id=1,
+                collection=collection_name(),
+                status="failed",
+                chunks_indexed=0,
+                error="索引暂不可用",
+            )
+        )
+    with sessions() as db:
+        rows = documents(1, db)
+        assert rows[0]["status"] == "parsed"
+        assert rows[0]["index_status"] == "failed"
+        assert rows[0]["chunk_count"] == 1
+        assert documents(1, db, offset=20) == []
+
+
+def test_parse_task_dispatches_index_after_committed_parse():
+    from app.workers.celery_app import index_document, ingest_document
+
+    with (
+        patch("app.modules.ingestion.service.process_version", return_value={"status": "parsed"}),
+        patch.object(index_document, "delay") as queued,
+    ):
+        assert ingest_document.run(9)["index_queued"] is True
+        queued.assert_called_once_with(9)
+    with (
+        patch("app.modules.ingestion.service.process_version", return_value={"status": "failed"}),
+        patch.object(index_document, "delay") as queued,
+    ):
+        assert ingest_document.run(9)["status"] == "failed"
+        queued.assert_not_called()
+
+
+def test_broker_failure_keeps_parsed_result():
+    from app.workers.celery_app import index_document, ingest_document
+
+    with (
+        patch("app.modules.ingestion.service.process_version", return_value={"status": "parsed"}),
+        patch.object(index_document, "delay", side_effect=RuntimeError),
+    ):
+        result = ingest_document.run(9)
+        assert result == {"status": "parsed", "index_queued": False}

@@ -161,3 +161,53 @@ def retry(version_id: int, db: DB):
     if version.status == "parsed":
         raise HTTPException(409, "该版本已经解析完成")
     return {"version_id": version_id, **dispatch(version)}
+
+
+@router.get("/knowledge-bases/{kb_id}/documents")
+def documents(kb_id: int, db: DB, limit: int = 50, offset: int = 0):
+    from app.adapters.vectorstore.milvus import collection_name
+    from app.modules.knowledge.models import VectorIndex
+
+    if db.get(KnowledgeBase, kb_id) is None:
+        raise HTTPException(404, "知识库不存在")
+    latest = (
+        select(DocumentVersion.document_id, func.max(DocumentVersion.version).label("latest"))
+        .group_by(DocumentVersion.document_id)
+        .subquery()
+    )
+    counts = (
+        select(Chunk.version_id, func.count(Chunk.id).label("total"))
+        .group_by(Chunk.version_id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(Document, DocumentVersion, VectorIndex, counts.c.total)
+        .join(DocumentVersion, DocumentVersion.document_id == Document.id)
+        .join(
+            latest,
+            (latest.c.document_id == Document.id) & (latest.c.latest == DocumentVersion.version),
+        )
+        .outerjoin(
+            VectorIndex,
+            (VectorIndex.version_id == DocumentVersion.id)
+            & (VectorIndex.collection == collection_name()),
+        )
+        .outerjoin(counts, counts.c.version_id == DocumentVersion.id)
+        .where(Document.knowledge_base_id == kb_id)
+        .order_by(Document.id.desc())
+        .offset(max(0, offset))
+        .limit(min(max(1, limit), 100))
+    )
+    return [
+        {
+            "id": d.id,
+            "filename": d.filename,
+            "version_id": v.id,
+            "status": v.status,
+            "error": v.error,
+            "chunk_count": count or 0,
+            "index_status": index.status if index else "pending",
+            "index_error": index.error if index else None,
+        }
+        for d, v, index, count in rows
+    ]

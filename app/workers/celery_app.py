@@ -31,7 +31,15 @@ def ping():
 def ingest_document(version_id: int):
     from app.modules.ingestion.service import process_version
 
-    return process_version(version_id)
+    result = process_version(version_id)
+    if result.get("status") == "parsed":
+        try:
+            task = index_document.delay(version_id)
+            result["index_queued"] = True
+            result["index_task_id"] = task.id
+        except Exception:  # noqa: BLE001 - parsed data persists; manual index remains available
+            result["index_queued"] = False
+    return result
 
 
 @celery_app.task(
