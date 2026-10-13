@@ -178,3 +178,11 @@ Qwen API 会接收问题及所选切片正文，真实私密资料需先明确�
 目前对话仅保存在页面内存，刷新/切换知识库会清空，不支持历史会话或流式输出。
 
 前端开发热更新：在 frontend 执行 `npm run dev`，访问 http://127.0.0.1:5173/ui/ 。
+
+### 固定评估集
+
+`python scripts/evaluate.py` 创建隔离的合成测试知识库并运行 30 个固定问题。
+结果写入 `evals/runs/<北京时间>/report.md` 与 `results.json`。
+统计文档级 Recall@3、拒答、引用来源匹配和检索/生成耗时；关键词筛查不能作为回答正确率。
+题集、语料和指标定义见 `evals/README.md`。
+`/chat/ask` 额外返回 `timings_ms`，便于区分检索与生成耗时。

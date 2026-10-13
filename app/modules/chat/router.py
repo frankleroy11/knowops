@@ -1,3 +1,5 @@
+from time import perf_counter
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -49,7 +51,16 @@ def answer_question(body: AskRequest, hits: list[dict]):
 def ask(body: AskRequest, db: DB):
     if not body.question.strip():
         raise HTTPException(422, "问题不能为空")
+    started = perf_counter()
     result = search(
         Query(query=body.question, knowledge_base_id=body.knowledge_base_id, top_k=body.top_k), db
     )
-    return answer_question(body, result["hits"])
+    retrieved = perf_counter()
+    answer = answer_question(body, result["hits"])
+    finished = perf_counter()
+    answer["timings_ms"] = {
+        "retrieval": round((retrieved - started) * 1000, 2),
+        "generation": round((finished - retrieved) * 1000, 2),
+        "total": round((finished - started) * 1000, 2),
+    }
+    return answer

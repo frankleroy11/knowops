@@ -1,0 +1,18 @@
+{
+  "timestamp": "20261013-120452",
+  "dataset_sha256": "a9805548ca6b1a2685d546904245de7eb968a050670c24ca25222d61df254f75",
+  "corpus_sha256": {
+    "VPN指南.md": "472f76a8a811f34d2ea64af9c2037fea595303550d4e20edba647bc452d1fbc0",
+    "产品手册.md": "b0b8f5f90a148760ba274045d91c3d26592aab478cb17d526c0eb84d9d5f5c56",
+    "报销制度.md": "aefd804e4297c1489d851d98c6784e906663f4ae5c21638c08726cb360bb1717",
+    "请假制度.md": "21b537a348fe836464158a4c7afd92b1fe847f39ed29da73e6f93f82fd6de4e0",
+    "账号安全.md": "3f8334adcf5c13f681845603b4fcaaaaaee15eac8ba4ed0440ac6ee8a458f7cb",
+    "隔离库专用.md": "2a3eed35507021e1dcc4357d011b3cecdb5925bd6dfb60bea9ba11fa7cc0a46a"
+  },
+  "model": "qwen-plus",
+  "embedding_model": "BAAI/bge-m3",
+  "collection": "knowops_chunks_b5f83ff13a7f83fb",
+  "top_k": 3,
+  "git_commit": "b339210352412006813f68d00ea494c4a639474a",
+  "working_tree_dirty": true
+}
