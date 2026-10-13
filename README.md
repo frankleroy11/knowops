@@ -1,6 +1,6 @@
 # KnowOps 企业知识库问答平台
 
-当前阶段：文档上传与异步解析。支持创建知识库、上传 TXT / Markdown / 文本 PDF、查看状态和切片、失败重试。问答、鉴权、向量化、版本更新与发布尚未实现。
+当前阶段：文档入库与语义检索（0.3.0）。支持创建知识库、上传 TXT / Markdown / 文本 PDF、异步解析、BGE-M3 向量化、Milvus 索引、限定知识库的语义检索与失败重试。大模型问答、鉴权、版本更新与发布尚未实现。
 
 ## 开发环境
 
@@ -8,7 +8,7 @@
 - 解释器：`/opt/anaconda3/envs/knowops/bin/python`
 - PyCharm 项目解释器已设置为上述路径；运行 `run.py` 或选择 `KnowOps API` 配置。
 - 已安装依赖见 requirements.txt，实际版本快照见 requirements.lock.txt。
-- 当前阶段不运行本地神经网络模型，未安装 PyTorch、LangChain、BGE 权重；接入检索时再安装并验证 MPS。
+- 已安装 PyTorch、Sentence Transformers，并验证 BGE-M3 在 MPS 上生成 1024 维向量；LangChain 尚未接入。
 
 ## 目录
 
@@ -20,12 +20,12 @@ app/
     auth/               用户与权限（待实现）
     knowledge/          知识库、文档、版本、切片数据模型与接口
     ingestion/          文本解析、按字符切分、PDF 页码保留
-    retrieval/          混合检索与引用（待实现）
+    retrieval/          语义检索与异步索引（已实现）
     chat/               会话与问答（待实现）
     feedback/           反馈与追踪（待实现）
     health/             健康检查（已实现）
-  adapters/             LLM、Embedding、Reranker、存储接口预留
-  workers/              Celery 入口与 ping 任务
+  adapters/             Embedding、Milvus 已实现；LLM、Reranker、存储扩展预留
+  workers/              Celery 解析、索引与 ping 任务
 migrations/             Alembic 迁移
 frontend/               Vue 前端预留
 storage/                原始文件预留
