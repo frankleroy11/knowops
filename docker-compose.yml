@@ -46,6 +46,14 @@ services:
     ports: ["127.0.0.1:19540:19530", "127.0.0.1:19091:9091"]
     volumes: ["milvus_data:/var/lib/milvus"]
     depends_on: [etcd, minio]
+  attu:
+    image: zilliz/attu:v2.5.10
+    profiles: [admin]
+    environment:
+      MILVUS_URL: milvus:19530
+    ports: ["127.0.0.1:8000:3000"]
+    depends_on: [milvus]
+    restart: unless-stopped
 volumes:
   mysql_data:
   redis_data:

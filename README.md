@@ -237,3 +237,10 @@ synthetic-v1 三个知识库。同一批候选分别取 dense 前三、重排前
 页面默认进入“统一问答”，从当前空间全部知识库检索，引用标明所属知识库。
 选择左侧单个知识库可限定检索并管理该库文档。API通过显式`scope=all`启用，
 原来的`knowledge_base_id`请求和单库隔离行为不变。见 [统一问答说明](docs/unified-chat.md)。
+
+### 查看向量数据库
+
+可选管理界面：运行 `docker compose --profile admin up -d attu` 后打开
+[Attu](http://127.0.0.1:8000/)，连接地址保持 `milvus:19530`，数据库为 `default`。
+它可查看向量集合、索引及记录。宿主机的19540端口是Milvus接口，没有网页首页。
+详见 [Attu使用说明](docs/milvus-attu.md)。
