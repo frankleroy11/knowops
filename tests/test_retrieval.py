@@ -240,3 +240,140 @@ def test_rerank_receives_only_authorized_candidates(sessions):
             assert response.json()["hits"][0]["score"] == 0.9
     finally:
         app.dependency_overrides.clear()
+
+
+def test_all_scope_resolves_existing_kbs_and_preserves_single_kb_filter(sessions):
+    from app.modules.knowledge.router import get_db
+    from app.modules.retrieval import router as retrieval
+
+    with sessions.begin() as db:
+        db.add(KnowledgeBase(id=2, name="人事"))
+        db.add(Document(id=2, knowledge_base_id=2, filename="leave.md"))
+        db.add(
+            DocumentVersion(
+                id=2,
+                document_id=2,
+                version=1,
+                content_hash="b" * 64,
+                storage_path="leave.md",
+                status="parsed",
+            )
+        )
+        db.add(Chunk(id=2, version_id=2, position=0, content="年假5天"))
+        for version in [1, 2]:
+            db.add(
+                VectorIndex(
+                    version_id=version,
+                    collection=collection_name(),
+                    status="indexed",
+                    chunks_indexed=1,
+                )
+            )
+
+    def database():
+        with sessions() as db:
+            yield db
+
+    class Store:
+        def search(self, vector, kb_id, limit):
+            assert kb_id == [1, 2] or kb_id == 1
+            return [
+                {"chunk_id": 1, "distance": 0.9},
+                {"chunk_id": 2, "distance": 0.8},
+                {"chunk_id": 9999, "distance": 0.7},
+            ]
+
+        def close(self):
+            pass
+
+    class Embedder:
+        def encode(self, texts, **kwargs):
+            return [[1.0, 0.0]]
+
+    app.dependency_overrides[get_db] = database
+    try:
+        with (
+            patch.object(retrieval, "MilvusStore", Store),
+            patch.object(retrieval, "get_embedder", return_value=Embedder()),
+        ):
+            client = TestClient(app)
+            result = client.post(
+                "/api/v1/search", json={"query": "VPN和年假", "scope": "all"}
+            ).json()
+            assert result["scope"] == "all"
+            assert [(h["knowledge_base_id"], h["knowledge_base_name"]) for h in result["hits"]] == [
+                (1, "test"),
+                (2, "人事"),
+            ]
+            result = client.post(
+                "/api/v1/search", json={"query": "VPN", "knowledge_base_id": 1}
+            ).json()
+            assert [h["chunk_id"] for h in result["hits"]] == [1]
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize("path", ["/api/v1/search", "/api/v1/chat/ask"])
+@pytest.mark.parametrize(
+    "scope",
+    [
+        {"scope": "all", "knowledge_base_id": 1},
+        {"scope": "invalid"},
+        {"scope": "knowledge_base"},
+        {"knowledge_base_id": 0},
+    ],
+)
+def test_scope_is_explicit_and_unambiguous(path, scope):
+    response = TestClient(app).post(path, json={"query": "VPN", "question": "VPN", **scope})
+    assert response.status_code == 422
+
+
+def test_unified_ask_passes_explicit_scope():
+    from app.modules.chat import router as chat
+    from app.modules.knowledge.router import get_db
+
+    app.dependency_overrides[get_db] = lambda: None
+    try:
+        with patch.object(chat, "search", return_value={"hits": []}) as search:
+            response = TestClient(app).post(
+                "/api/v1/chat/ask", json={"question": "VPN", "scope": "all"}
+            )
+            assert response.status_code == 200
+            assert not response.json()["answerable"]
+            assert search.call_args.args[0].scope == "all"
+            assert search.call_args.args[0].knowledge_base_id is None
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_global_vector_search_has_explicit_numeric_filter():
+    from unittest.mock import MagicMock
+
+    from app.adapters.vectorstore.milvus import MilvusStore
+
+    store = object.__new__(MilvusStore)
+    store.name = "test"
+    store.client = MagicMock()
+    store.client.search.return_value = [[]]
+    assert store.search([1.0, 0.0], [2, 5], 3) == []
+    assert store.client.search.call_args.kwargs["filter"] == "knowledge_base_id in [2,5]"
+    store.client.search.reset_mock()
+    assert store.search([1.0, 0.0], [], 3) == []
+    store.client.search.assert_not_called()
+
+
+def test_empty_all_scope_never_issues_unfiltered_vector_search():
+    from unittest.mock import MagicMock
+
+    from app.modules.retrieval import router as retrieval
+
+    db = MagicMock()
+    db.scalars.return_value = []
+    with (
+        patch.object(retrieval, "MilvusStore") as store,
+        patch.object(retrieval, "get_embedder") as embedder,
+    ):
+        result = retrieval.search(retrieval.Query(query="VPN", scope="all"), db)
+    assert result["hits"] == []
+    store.assert_not_called()
+    embedder.assert_not_called()
