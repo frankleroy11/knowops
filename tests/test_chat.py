@@ -232,3 +232,65 @@ def test_in_range_wrong_source_can_only_repair_unique_quote():
     assert result["source_id_corrections"] == [
         {"claim_index": 0, "model_source_id": 1, "source_id": 2}
     ]
+
+
+def test_neighbor_mode_can_cite_context_beyond_retrieval_top_k():
+    hits = HITS + [
+        {
+            "chunk_id": 6,
+            "content": "具体额度2天",
+            "filename": "quota.md",
+            "knowledge_base_name": "制度库",
+        }
+    ]
+    response = model_answer(
+        [{"text": "额度2天", "evidence": [{"source_id": 2, "quote": "具体额度2天"}]}]
+    )
+    body = AskRequest(question="额度几天", knowledge_base_id=2, top_k=1, expand_context=True)
+    with patch("app.modules.chat.router.generate_grounded_answer", return_value=response) as model:
+        result = answer_question(body, hits)
+    assert result["citations"][0]["chunk_id"] == 6
+    assert model.call_args.args[1][1]["filename"] == "quota.md"
+    assert model.call_args.args[1][1]["knowledge_base"] == "制度库"
+    with patch("app.modules.chat.router.generate_grounded_answer", return_value=response):
+        result = answer_question(
+            AskRequest(question="额度几天", knowledge_base_id=2, top_k=1), hits
+        )
+    assert not result["answerable"]
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_ask_routes_optional_neighbor_context(enabled):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from app.modules.chat import router as chat
+    from app.modules.knowledge.router import get_db
+
+    anchors = HITS
+    expanded = HITS + [{"content": "补充资料", "chunk_id": 6}]
+    app.dependency_overrides[get_db] = lambda: None
+    try:
+        with (
+            patch.object(chat, "search", return_value={"hits": anchors}),
+            patch.object(chat, "expand_neighbors", return_value=expanded) as expand,
+            patch.object(
+                chat,
+                "answer_question",
+                return_value={"answer": "资料不足", "answerable": False, "citations": []},
+            ) as answer,
+        ):
+            response = TestClient(app).post(
+                "/api/v1/chat/ask",
+                json={"question": "VPN", "scope": "all", "expand_context": enabled},
+            )
+        assert response.status_code == 200
+        assert response.json()["context_expanded"] is enabled
+        assert response.json()["context_chunk_count"] == (2 if enabled else 1)
+        assert answer.call_args.args[1] == (expanded if enabled else anchors)
+        if enabled:
+            expand.assert_called_once_with(anchors, None)
+        else:
+            expand.assert_not_called()
+    finally:
+        app.dependency_overrides.clear()

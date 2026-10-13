@@ -377,3 +377,113 @@ def test_empty_all_scope_never_issues_unfiltered_vector_search():
     assert result["hits"] == []
     store.assert_not_called()
     embedder.assert_not_called()
+
+
+def test_neighbors_stay_in_same_version_document_and_kb(sessions):
+    from app.modules.retrieval.context import expand_neighbors
+
+    with sessions.begin() as db:
+        db.add(Chunk(id=2, version_id=1, position=1, content="相邻表格"))
+        db.add(Chunk(id=3, version_id=1, position=2, content="距离两片，不补全"))
+        db.add(
+            VectorIndex(
+                version_id=1, collection=collection_name(), status="indexed", chunks_indexed=3
+            )
+        )
+        db.add(KnowledgeBase(id=2, name="other"))
+        db.add(Document(id=2, knowledge_base_id=2, filename="other.md"))
+        db.add(
+            DocumentVersion(
+                id=2,
+                document_id=2,
+                version=1,
+                content_hash="b" * 64,
+                storage_path="other.md",
+                status="parsed",
+            )
+        )
+        db.add(Chunk(id=4, version_id=2, position=1, content="其他库，不补全"))
+        db.add(
+            VectorIndex(
+                version_id=2, collection=collection_name(), status="indexed", chunks_indexed=1
+            )
+        )
+    anchors = [
+        {
+            "chunk_id": 1,
+            "version_id": 1,
+            "document_id": 1,
+            "knowledge_base_id": 1,
+            "position": 0,
+            "content": "连接VPN",
+            "score": 0.9,
+        }
+    ]
+    with sessions() as db:
+        result = expand_neighbors(anchors, db)
+    assert [h["chunk_id"] for h in result] == [1, 2]
+    assert result[1]["knowledge_base_id"] == 1
+    assert result[1]["filename"] == "vpn.md"
+    assert result[1]["context_role"] == "neighbor"
+    assert "score" not in result[1]
+    assert "context_role" not in anchors[0]
+
+
+def test_neighbor_budget_keeps_all_anchors_first(sessions):
+    from app.modules.retrieval.context import expand_neighbors
+
+    with sessions.begin() as db:
+        db.add(
+            VectorIndex(
+                version_id=1, collection=collection_name(), status="indexed", chunks_indexed=11
+            )
+        )
+        for position in range(1, 11):
+            db.add(
+                Chunk(id=position + 1, version_id=1, position=position, content=f"片段{position}")
+            )
+    anchors = [
+        {
+            "chunk_id": p + 1,
+            "version_id": 1,
+            "document_id": 1,
+            "knowledge_base_id": 1,
+            "position": p,
+            "content": f"片段{p}",
+        }
+        for p in [0, 2, 4, 6, 8]
+    ]
+    with sessions() as db:
+        result = expand_neighbors(anchors, db)
+    assert len(result) == 8
+    assert [h["chunk_id"] for h in result[:5]] == [1, 3, 5, 7, 9]
+    assert len({h["chunk_id"] for h in result}) == 8
+
+
+def test_unindexed_neighbors_are_not_added(sessions):
+    from app.modules.retrieval.context import expand_neighbors
+
+    with sessions.begin() as db:
+        db.add(Chunk(id=2, version_id=1, position=1, content="没有索引"))
+    anchors = [
+        {
+            "chunk_id": 1,
+            "version_id": 1,
+            "document_id": 1,
+            "knowledge_base_id": 1,
+            "position": 0,
+            "content": "连接VPN",
+        }
+    ]
+    with sessions() as db:
+        assert len(expand_neighbors(anchors, db)) == 1
+
+
+def test_empty_context_does_not_query_database():
+    from unittest.mock import MagicMock
+
+    from app.modules.retrieval.context import expand_neighbors
+
+    db = MagicMock()
+    assert expand_neighbors([], db) == []
+    db.execute.assert_not_called()

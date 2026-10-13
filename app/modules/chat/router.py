@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from app.adapters.llm.qwen import LLMUnavailable, generate_grounded_answer
 from app.modules.knowledge.router import DB
+from app.modules.retrieval.context import MAX_CONTEXT_CHUNKS, expand_neighbors
 from app.modules.retrieval.router import Query, search
 
 router = APIRouter(tags=["知识库问答"])
@@ -17,6 +18,7 @@ class AskRequest(BaseModel):
     knowledge_base_id: int | None = Field(default=None, gt=0)
     scope: Literal["knowledge_base", "all"] = "knowledge_base"
     top_k: int = Field(default=3, ge=1, le=8)
+    expand_context: bool = False
     rerank: bool = False
     candidate_k: int = Field(default=10, ge=1, le=50)
     max_per_document: int = Field(default=0, ge=0, le=50)
@@ -70,8 +72,16 @@ def normalize_quote(text):
 
 
 def answer_question(body: AskRequest, hits: list[dict]):
-    selected = hits[: body.top_k]
-    sources = [{"id": i, "content": h["content"][:1200]} for i, h in enumerate(selected, 1)]
+    selected = hits[: MAX_CONTEXT_CHUNKS if body.expand_context else body.top_k]
+    sources = [
+        {
+            "id": i,
+            "filename": h.get("filename", ""),
+            "knowledge_base": h.get("knowledge_base_name", ""),
+            "content": h["content"][:1200],
+        }
+        for i, h in enumerate(selected, 1)
+    ]
     if not sources:
         return refuse("no_context")
     try:
@@ -146,9 +156,12 @@ def ask(body: AskRequest, db: DB):
         ),
         db,
     )
+    hits = expand_neighbors(result["hits"], db) if body.expand_context else result["hits"]
     retrieved = perf_counter()
-    answer = answer_question(body, result["hits"])
+    answer = answer_question(body, hits)
     finished = perf_counter()
+    answer["context_chunk_count"] = len(hits)
+    answer["context_expanded"] = body.expand_context
     answer["timings_ms"] = {
         "retrieval": round((retrieved - started) * 1000, 2),
         "generation": round((finished - retrieved) * 1000, 2),
