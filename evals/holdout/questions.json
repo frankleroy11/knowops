@@ -1,0 +1,332 @@
+[
+  {
+    "id": "NEW-01",
+    "domain": "it",
+    "kind": "answerable",
+    "question": "外包同事每个月有多少免费打印额度？用不完能留到下个月吗？",
+    "reference_answer": "每月50页，不累计、不结转。",
+    "fact_groups": [
+      {
+        "fact": "免费额度为每月 50 页",
+        "options": [
+          {
+            "source": "打印计费与耗材申领规定.md",
+            "quote": "免费额度为每月 50 页"
+          }
+        ]
+      },
+      {
+        "fact": "不累计、不结转",
+        "options": [
+          {
+            "source": "打印计费与耗材申领规定.md",
+            "quote": "不累计、不结转"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "NEW-02",
+    "domain": "it",
+    "kind": "answerable",
+    "question": "硒鼓和彩色墨盒分别要提前几个工作日申请？",
+    "reference_answer": "硒鼓提前1个工作日，彩色墨盒提前2个工作日。",
+    "fact_groups": [
+      {
+        "fact": "| 硒鼓 | 1 个工作日 |",
+        "options": [
+          {
+            "source": "打印计费与耗材申领规定.md",
+            "quote": "| 硒鼓 | 1 个工作日 |"
+          }
+        ]
+      },
+      {
+        "fact": "| 彩色墨盒 | 2 个工作日 |",
+        "options": [
+          {
+            "source": "打印计费与耗材申领规定.md",
+            "quote": "| 彩色墨盒 | 2 个工作日 |"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "NEW-03",
+    "domain": "it",
+    "kind": "answerable",
+    "question": "想借便携音箱开活动，最多能借多少天？弄丢后多久内上报？",
+    "reference_answer": "最多14天，损坏或遗失24小时内上报。",
+    "fact_groups": [
+      {
+        "fact": "最长期限 14 天",
+        "options": [
+          {
+            "source": "会议室音视频设备使用手册.md",
+            "quote": "最长期限 14 天"
+          }
+        ]
+      },
+      {
+        "fact": "在 24 小时内上报",
+        "options": [
+          {
+            "source": "会议室音视频设备使用手册.md",
+            "quote": "在 24 小时内上报"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "NEW-04",
+    "domain": "it",
+    "kind": "answerable",
+    "question": "会议摄像头与桌面线缆分别多久巡检一次？",
+    "reference_answer": "摄像头每季度一次，桌面线缆每半年一次。",
+    "fact_groups": [
+      {
+        "fact": "| 会议摄像头 | CAM-楼层-序号 | 服务台与终端组 | 每季度 1 次 |",
+        "options": [
+          {
+            "source": "会议室音视频设备使用手册.md",
+            "quote": "| 会议摄像头 | CAM-楼层-序号 | 服务台与终端组 | 每季度 1 次 |"
+          }
+        ]
+      },
+      {
+        "fact": "| 桌面线缆与面板 | CBL-楼层-序号 | 网络与通信组 | 每半年 1 次 |",
+        "options": [
+          {
+            "source": "会议室音视频设备使用手册.md",
+            "quote": "| 桌面线缆与面板 | CBL-楼层-序号 | 网络与通信组 | 每半年 1 次 |"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "NEW-05",
+    "domain": "hr",
+    "kind": "answerable",
+    "question": "公司安排我周日参加培训，这段时间如何折算调休？",
+    "reference_answer": "按2倍基数折算调休。",
+    "fact_groups": [
+      {
+        "fact": "休息日参加公司安排的培训，可折算调休，按 2 倍基数计算。",
+        "options": [
+          {
+            "source": "培训管理办法.md",
+            "quote": "休息日参加公司安排的培训，可折算调休，按 2 倍基数计算。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "NEW-06",
+    "domain": "hr",
+    "kind": "answerable",
+    "question": "外部课程结束后，培训总结最迟何时提交，部门分享至少讲多久？",
+    "reference_answer": "5个工作日内提交总结和结业证明，分享不少于30分钟。",
+    "fact_groups": [
+      {
+        "fact": "培训结束后 5 个工作日内提交培训总结与结业证明",
+        "options": [
+          {
+            "source": "培训管理办法.md",
+            "quote": "培训结束后 5 个工作日内提交培训总结与结业证明"
+          }
+        ]
+      },
+      {
+        "fact": "不少于 30 分钟的知识分享",
+        "options": [
+          {
+            "source": "培训管理办法.md",
+            "quote": "不少于 30 分钟的知识分享"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "NEW-07",
+    "domain": "hr",
+    "kind": "answerable",
+    "question": "一份含税80万元的商务合同，谁审批，表里要求多久完成？",
+    "reference_answer": "财务负责人和总经理审批，7个工作日。",
+    "fact_groups": [
+      {
+        "fact": "| 500000 元（含）至 2000000 元 | 财务负责人 → 总经理 | 7 个工作日 |",
+        "options": [
+          {
+            "source": "用章与合同审批权限表.md",
+            "quote": "| 500000 元（含）至 2000000 元 | 财务负责人 → 总经理 | 7 个工作日 |"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "NEW-08",
+    "domain": "hr",
+    "kind": "answerable",
+    "question": "一般合同和重大技术许可合同，终止以后原件分别还要保存几年？",
+    "reference_answer": "一般5年，重大技术许可10年。",
+    "fact_groups": [
+      {
+        "fact": "合同原件保管期限为合同终止后 5 年；涉及不动产、重大技术许可的为 10 年。",
+        "options": [
+          {
+            "source": "用章与合同审批权限表.md",
+            "quote": "合同原件保管期限为合同终止后 5 年；涉及不动产、重大技术许可的为 10 年。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "NEW-09",
+    "domain": "product",
+    "kind": "answerable",
+    "question": "云盘回调地址能填公网IP并用8443端口吗？",
+    "reference_answer": "不可以，必须HTTPS、443端口、公网可解析域名。",
+    "fact_groups": [
+      {
+        "fact": "端口固定 443，不支持自定义端口",
+        "options": [
+          {
+            "source": "星桥云盘 Webhook 事件回调说明.md",
+            "quote": "端口固定 443，不支持自定义端口"
+          }
+        ]
+      },
+      {
+        "fact": "地址必须是公网可解析的域名，不接受 IP 直连",
+        "options": [
+          {
+            "source": "星桥云盘 Webhook 事件回调说明.md",
+            "quote": "地址必须是公网可解析的域名，不接受 IP 直连"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "NEW-10",
+    "domain": "product",
+    "kind": "answerable",
+    "question": "Webhook的容量提醒一天最多发几次？连续几次投递失败会发邮件？",
+    "reference_answer": "容量提醒每天最多3次，连续3次投递失败发邮件。",
+    "fact_groups": [
+      {
+        "fact": "`quota.warning` 事件每天最多发送 3 次",
+        "options": [
+          {
+            "source": "星桥云盘 Webhook 事件回调说明.md",
+            "quote": "`quota.warning` 事件每天最多发送 3 次"
+          }
+        ]
+      },
+      {
+        "fact": "连续 3 次投递失败后，系统会向应用联系人发送邮件提醒。",
+        "options": [
+          {
+            "source": "星桥云盘 Webhook 事件回调说明.md",
+            "quote": "连续 3 次投递失败后，系统会向应用联系人发送邮件提醒。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "NEW-11",
+    "domain": "product",
+    "kind": "answerable",
+    "question": "技能组里的大家都满负荷时，新工单等多久才尝试转去别的组？",
+    "reference_answer": "超过30分钟触发转派尝试。",
+    "fact_groups": [
+      {
+        "fact": "若全组都达到上限，工单进入等待队列，超过 30 分钟触发一次转派尝试",
+        "options": [
+          {
+            "source": "星桥工单自动分派规则说明.md",
+            "quote": "若全组都达到上限，工单进入等待队列，超过 30 分钟触发一次转派尝试"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "NEW-12",
+    "domain": "product",
+    "kind": "answerable",
+    "question": "P0工单的组长不在线时，要等多久，随后分给谁？",
+    "reference_answer": "2分钟后分给组内在处理工单数最少的人。",
+    "fact_groups": [
+      {
+        "fact": "若组长不在线，系统会在 2 分钟后改派给组内在处理工单数最少的人",
+        "options": [
+          {
+            "source": "星桥工单自动分派规则说明.md",
+            "quote": "若组长不在线，系统会在 2 分钟后改派给组内在处理工单数最少的人"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "NEW-13",
+    "domain": "it",
+    "kind": "refusal",
+    "question": "彩色墨盒采购指定的供应商统一社会信用代码是多少？",
+    "reference_answer": "资料不足，应拒答。",
+    "fact_groups": []
+  },
+  {
+    "id": "NEW-14",
+    "domain": "hr",
+    "kind": "refusal",
+    "question": "培训服务期协议的违约争议指定由哪一家仲裁机构处理？",
+    "reference_answer": "资料不足，应拒答。",
+    "fact_groups": []
+  },
+  {
+    "id": "NEW-15",
+    "domain": "product",
+    "kind": "refusal",
+    "question": "Webhook投递服务的服务器CPU具体型号是什么？",
+    "reference_answer": "资料不足，应拒答。",
+    "fact_groups": []
+  },
+  {
+    "id": "NEW-16",
+    "domain": "it",
+    "ask_domain": "hr",
+    "kind": "isolation",
+    "question": "想借便携音箱开活动，最多能借多少天？弄丢后多久内上报？",
+    "reference_answer": "目标知识库没有该事实，应拒答。",
+    "fact_groups": []
+  },
+  {
+    "id": "NEW-17",
+    "domain": "hr",
+    "ask_domain": "product",
+    "kind": "isolation",
+    "question": "一般合同和重大技术许可合同，终止以后原件分别还要保存几年？",
+    "reference_answer": "目标知识库没有该事实，应拒答。",
+    "fact_groups": []
+  },
+  {
+    "id": "NEW-18",
+    "domain": "product",
+    "ask_domain": "it",
+    "kind": "isolation",
+    "question": "P0工单的组长不在线时，要等多久，随后分给谁？",
+    "reference_answer": "目标知识库没有该事实，应拒答。",
+    "fact_groups": []
+  }
+]

@@ -153,3 +153,9 @@ HR-32 原始标注缺口仍保留于旧指标，新指标使用补充后的证�
 `python scripts/rescore_evidence.py` 仅对存档 dev 候选和分数重算指标，不发起检索或大模型调用。
 结果位于 annotation_runs/，解释与修改依据见 docs/evidence-annotation-review.md。
 本次已诊断过的六题不是独立盲测集，不能将修正后的增益解释为泛化能力提升。
+
+## 前瞻冻结留出测试
+
+新建的 `holdout/` 使用18道新题，先冻结问题和来源片段，再成对运行普通检索与重排序，并实际调用Qwen。
+运行：`HF_HUB_OFFLINE=1 python scripts/evaluate_holdout.py`。完整协议、限制及计时口径见 `holdout/README.md`。
+助手构建的小样本不等于独立人工盲测；保留原测试集，禁止按新结果事后改标签。

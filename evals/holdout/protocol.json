@@ -1,0 +1,19 @@
+{
+  "version": "prospective-holdout-v1",
+  "dataset_sha256": "05e4be934d835ec83bf2f2593c356799e5845f98cd921e04dceb5c48a6aa2a3a",
+  "frozen_before_retrieval": true,
+  "questions": 18,
+  "answerable": 12,
+  "refusal": 3,
+  "isolation": 3,
+  "strategies": [
+    "dense_3",
+    "rerank_diverse_2"
+  ],
+  "candidate_k": 10,
+  "top_k": 3,
+  "max_per_document": 2,
+  "selection": "Fresh facts/questions on six existing synthetic corpus files. Assistant-authored; not independent human labels or unseen-corpus generalization.",
+  "decision": "Keep dense default unless evidence gain >=2/12, zero isolation leaks, no additional expected-refusal failures, and independently reviewed generation is noninferior. Small set is directional only.",
+  "generation": "Qwen actual calls, temperature 0; alternate execution order; preserve failures and human-review fields as null; no post-result relabeling."
+}
