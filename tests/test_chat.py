@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 import httpx
@@ -18,25 +19,103 @@ def test_no_context_does_not_call_llm():
         model.assert_not_called()
 
 
-@pytest.mark.parametrize("ids,answerable", [([99], True), ([], True), ([1], False)])
-def test_refusal_and_fabricated_source(ids, answerable):
-    with patch(
-        "app.modules.chat.router.generate_grounded_answer",
-        return_value={"answer": "内容", "source_ids": ids, "answerable": answerable},
-    ):
-        result = answer_question(BODY, HITS)
-        assert result["answerable"] is False
-        assert result["citations"] == []
+def model_answer(claims=None, **kwargs):
+    return {
+        "answerable": True,
+        "unanswered_questions": [],
+        "claims": claims
+        if claims is not None
+        else [{"text": "先申请账号", "evidence": [{"source_id": 1, "quote": "先申请 VPN 账号"}]}],
+        **kwargs,
+    }
 
 
-def test_citations_are_resolved_from_backend():
-    with patch(
-        "app.modules.chat.router.generate_grounded_answer",
-        return_value={"answer": "申请账号", "source_ids": [1, 1], "answerable": True},
-    ):
+@pytest.mark.parametrize(
+    "response,status",
+    [
+        (model_answer(answerable=False), "model_refused"),
+        (model_answer(unanswered_questions=["缺少时限"]), "incomplete_answer"),
+        (model_answer(claims=[]), "missing_claims"),
+        (
+            model_answer(
+                claims=[
+                    {
+                        "text": "申请账号",
+                        "evidence": [{"source_id": 99, "quote": "先申请 VPN 账号"}],
+                    }
+                ]
+            ),
+            "invalid_source",
+        ),
+        (
+            model_answer(
+                claims=[
+                    {"text": "申请账号", "evidence": [{"source_id": 1, "quote": "无需申请账号"}]}
+                ]
+            ),
+            "invalid_evidence",
+        ),
+        (
+            model_answer(
+                claims=[{"text": "申请账号", "evidence": [{"source_id": 1, "quote": " "}]}]
+            ),
+            "invalid_evidence",
+        ),
+    ],
+)
+def test_unverified_answers_are_refused(response, status):
+    with patch("app.modules.chat.router.generate_grounded_answer", return_value=response):
         result = answer_question(BODY, HITS)
-        assert len(result["citations"]) == 1
-        assert result["citations"][0]["chunk_id"] == 5
+    assert not result["answerable"]
+    assert result["citations"] == []
+    assert result["grounding_status"] == status
+
+
+def test_multiple_facts_resolve_all_sources_and_assemble_answer():
+    hits = HITS + [{"chunk_id": 6, "content": "有效期 2 小时", "filename": "time.md"}]
+    claims = [
+        {"text": "先申请账号", "evidence": [{"source_id": 1, "quote": "先申请 VPN 账号"}]},
+        {
+            "text": "有效期2小时",
+            "evidence": [
+                {"source_id": 2, "quote": "有效期 2 小时"},
+                {"source_id": 2, "quote": "2 小时"},
+            ],
+        },
+    ]
+    with patch(
+        "app.modules.chat.router.generate_grounded_answer", return_value=model_answer(claims)
+    ):
+        result = answer_question(BODY, hits)
+    assert result["answer"] == "先申请账号\n有效期2小时"
+    assert [c["chunk_id"] for c in result["citations"]] == [5, 6]
+    assert result["grounding_status"] == "quotes_validated"
+
+
+def test_quote_outside_model_context_is_rejected():
+    hits = [{"content": "甲" * 1200 + "隐藏证据", "chunk_id": 5}]
+    claims = [{"text": "事实", "evidence": [{"source_id": 1, "quote": "隐藏证据"}]}]
+    with patch(
+        "app.modules.chat.router.generate_grounded_answer", return_value=model_answer(claims)
+    ):
+        assert answer_question(BODY, hits)["grounding_status"] == "invalid_evidence"
+
+
+def test_one_bad_claim_rejects_entire_answer():
+    response = model_answer()
+    response["claims"].append({"text": "两小时", "evidence": [{"source_id": 1, "quote": "两小时"}]})
+    with patch("app.modules.chat.router.generate_grounded_answer", return_value=response):
+        assert answer_question(BODY, HITS)["citations"] == []
+
+
+def test_missing_evidence_schema_is_502():
+    response = model_answer([{"text": "无依据事实", "evidence": []}])
+    with (
+        patch("app.modules.chat.router.generate_grounded_answer", return_value=response),
+        pytest.raises(HTTPException) as error,
+    ):
+        answer_question(BODY, HITS)
+    assert error.value.status_code == 502
 
 
 def test_provider_failure_is_503():
@@ -52,15 +131,14 @@ def test_adapter_http_contract():
     def handler(request):
         assert request.url.path == "/compatible-mode/v1/chat/completions"
         assert request.headers["authorization"] == "Bearer test-key"
+        system = json.loads(request.content)["messages"][0]["content"]
+        assert "合法source_id仅为[1]" in system
+        assert "应回答不可以" in system
         return httpx.Response(
             200,
             json={
                 "choices": [
-                    {
-                        "message": {
-                            "content": '{"answer":"申请账号","source_ids":[1],"answerable":true}'
-                        }
-                    }
+                    {"message": {"content": json.dumps(model_answer(), ensure_ascii=False)}}
                 ]
             },
         )
@@ -81,3 +159,22 @@ def test_adapter_http_contract():
         ),
     ):
         assert generate_grounded_answer("VPN", [{"id": 1, "content": "申请账号"}])["answerable"]
+
+
+def test_whitespace_layout_differences_are_allowed():
+    hits = [{"content": "有效期\n 2 小时", "chunk_id": 7}]
+    response = model_answer(
+        [{"text": "有效期2小时", "evidence": [{"source_id": 1, "quote": "有效期 2 小时"}]}]
+    )
+    with patch("app.modules.chat.router.generate_grounded_answer", return_value=response):
+        assert answer_question(BODY, hits)["answerable"] is True
+
+
+def test_free_answer_outside_claims_is_rejected():
+    response = {**model_answer(), "answer": "额外无依据建议"}
+    with (
+        patch("app.modules.chat.router.generate_grounded_answer", return_value=response),
+        pytest.raises(HTTPException) as error,
+    ):
+        answer_question(BODY, HITS)
+    assert error.value.status_code == 502

@@ -32,32 +32,78 @@ class AskRequest(BaseModel):
         return self
 
 
+class Evidence(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    source_id: int
+    quote: str = Field(min_length=1, max_length=1200)
+
+
+class Claim(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    text: str = Field(min_length=1, max_length=2000)
+    evidence: list[Evidence] = Field(min_length=1, max_length=8)
+
+
 class ModelAnswer(BaseModel):
-    model_config = ConfigDict(strict=True)
-    answer: str = Field(min_length=1, max_length=10000)
-    source_ids: list[int]
+    model_config = ConfigDict(strict=True, extra="forbid")
     answerable: bool
+    claims: list[Claim] = Field(max_length=20)
+    unanswered_questions: list[str] = Field(max_length=20)
+
+
+def refuse(reason):
+    return {
+        "answer": REFUSAL,
+        "answerable": False,
+        "citations": [],
+        "claims": [],
+        "grounding_status": reason,
+    }
+
+
+def normalize_quote(text):
+    # Permit whitespace layout differences only, not fuzzy matches or omitted words.
+    return " ".join(text.split())
 
 
 def answer_question(body: AskRequest, hits: list[dict]):
-    # Cap context size; local character chunks are at most 800 characters each.
     selected = hits[: body.top_k]
     sources = [{"id": i, "content": h["content"][:1200]} for i, h in enumerate(selected, 1)]
     if not sources:
-        return {"answer": REFUSAL, "answerable": False, "citations": []}
+        return refuse("no_context")
     try:
         generated = ModelAnswer.model_validate(generate_grounded_answer(body.question, sources))
     except LLMUnavailable as exc:
         raise HTTPException(503, str(exc)) from None
     except ValidationError:
         raise HTTPException(502, "模型响应格式不符合要求，请重试") from None
-    ids = list(dict.fromkeys(generated.source_ids))
-    # Reject unsupported IDs rather than silently attaching unrelated sources.
-    if not generated.answerable or not ids or any(i < 1 or i > len(selected) for i in ids):
-        return {"answer": REFUSAL, "answerable": False, "citations": []}
+    if not generated.answerable:
+        return refuse("model_refused")
+    if generated.unanswered_questions:
+        return refuse("incomplete_answer")
+    if not generated.claims:
+        return refuse("missing_claims")
+    ids, claims = [], []
+    for claim in generated.claims:
+        if not claim.text.strip():
+            return refuse("invalid_evidence")
+        evidence = []
+        for item in claim.evidence:
+            if item.source_id < 1 or item.source_id > len(sources):
+                return refuse("invalid_source")
+            quote = normalize_quote(item.quote)
+            # Validate against exactly the bounded context seen by the model.
+            if not quote or quote not in normalize_quote(sources[item.source_id - 1]["content"]):
+                return refuse("invalid_evidence")
+            if item.source_id not in ids:
+                ids.append(item.source_id)
+            evidence.append(item.model_dump())
+        claims.append({"text": claim.text.strip(), "evidence": evidence})
     return {
-        "answer": generated.answer,
+        "answer": "\n".join(c["text"] for c in claims),
         "answerable": True,
+        "claims": claims,
+        "grounding_status": "quotes_validated",
         "citations": [{"source_id": i, **selected[i - 1]} for i in ids],
     }
 
