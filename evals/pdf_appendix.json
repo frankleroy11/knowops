@@ -1,0 +1,54 @@
+{
+  "purpose": "验证 PDF 解析、分页与 chunks.page 溯源；正文为 ASCII，事实项与 Markdown 一致。",
+  "limitations": "内置标准字体不含 CJK 字形，因此 PDF 附录正文为英文；不能代表中文 PDF 版式。",
+  "files": {
+    "it": [
+      {
+        "file": "it-vpn-lockout-policy.pdf",
+        "format": "pdf",
+        "pages": 2,
+        "bytes": 2339,
+        "sha256": "3ae9b1b255e610a99dbb1b881f3e9931be02cacedc98e0d229518469575acdcf"
+      },
+      {
+        "file": "it-exit-account-revocation.pdf",
+        "format": "pdf",
+        "pages": 2,
+        "bytes": 2402,
+        "sha256": "3c41effaaaab9325fe0bcc8d61799276ccddaa71d474f32e5ea209deacec1919"
+      }
+    ],
+    "hr": [
+      {
+        "file": "hr-travel-reimbursement-card.pdf",
+        "format": "pdf",
+        "pages": 2,
+        "bytes": 2378,
+        "sha256": "cbc973766fbc8d8650bf60cc575c6dbc96f32c3b23b3ae85c504db88d1c98eda"
+      },
+      {
+        "file": "hr-leave-quota-card.pdf",
+        "format": "pdf",
+        "pages": 2,
+        "bytes": 2346,
+        "sha256": "cc01f3b1b329fc9847483e34914210483b280aae0a2a0a373213bd22dc8507c6"
+      }
+    ],
+    "product": [
+      {
+        "file": "pd-clouddrive-quota-limits.pdf",
+        "format": "pdf",
+        "pages": 2,
+        "bytes": 2341,
+        "sha256": "d86c4d8821ad083370b0f572bee759628d0351ff7b4b2703d758b545c79a4145"
+      },
+      {
+        "file": "pd-sla-response-tiers.pdf",
+        "format": "pdf",
+        "pages": 2,
+        "bytes": 2364,
+        "sha256": "efe4a465748b7ec5b79f13adb45087ae6fa8b90e873cf4c86f8dd3bfd440055c"
+      }
+    ]
+  }
+}

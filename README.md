@@ -64,6 +64,7 @@ python -m pip check
 python -m pytest -q
 ruff check .
 python scripts/check_services.py
+python scripts/check_retrieval.py
 ```
 
 ## 服务地址
@@ -181,8 +182,23 @@ Qwen API 会接收问题及所选切片正文，真实私密资料需先明确�
 
 ### 固定评估集
 
-`python scripts/evaluate.py` 创建隔离的合成测试知识库并运行 30 个固定问题。
-结果写入 `evals/runs/<北京时间>/report.md` 与 `results.json`。
-统计文档级 Recall@3、拒答、引用来源匹配和检索/生成耗时；关键词筛查不能作为回答正确率。
-题集、语料和指标定义见 `evals/README.md`。
+当前数据集为**星桥科技合成语料**：3 个知识库、126 份语料（含 6 份 PDF 附录）、452 个切片、168 道固定题
+（含 18 道跨库隔离题）。语料为合成内容，不对应任何真实企业，指标不能作为真实企业准确率依据。
+
+```bash
+python evals/tools/build_questions.py     # 校验 168 条标注并生成 questions.json / manifest.json
+python scripts/evaluate_v2.py             # 完整评估：入库 → 索引 → 检索 + 问答
+python scripts/evaluate_v2.py --skip-chat # 只评检索，不调用大模型
+python scripts/evaluate_v2.py --reuse --top-k 5   # 复用已入库数据做参数对照
+```
+
+结果写入 `evals/runs/<北京时间>/`：`metadata.json`（语料哈希、模型、索引耗时、PDF 页码）、
+`results.json`、`report.md`（含逐题人工复核栏）。
+
+指标包含文档级 Recall@k、**切片级** Recall@k、MRR、nDCG、拒答准确率、引用来源匹配，
+并按难度（easy / paraphrase / numeric / multi_source）与 dev / test 分组。
+关键词筛查仅作线索，**不是**回答正确率。
+
+数据集构成、标注校验规则、真实评估结果与已知局限见 `docs/dataset-verification.md`；
+指标口径与局限见 `evals/README.md`。旧版 30 题数据集与基线 run 保留在 `evals/legacy/`。
 `/chat/ask` 额外返回 `timings_ms`，便于区分检索与生成耗时。
