@@ -1,0 +1,184 @@
+{
+  "metadata": {
+    "purpose": "post-conjunction-rule replay of frozen NEW-09 context; diagnostic only",
+    "question_id": "NEW-09",
+    "replay_source": "evals/context_runs/20261013-180519/results.json",
+    "model": "qwen-plus",
+    "temperature": 0,
+    "calls_budget": 6,
+    "probe_questions": [],
+    "counts_as_regression": false,
+    "note": "Sources reconstructed from the archived row; no retrieval re-run. unanswered_questions is retained here because the refusal path drops it."
+  },
+  "rows": [
+    {
+      "id": "NEW-09",
+      "frozen_question": "云盘回调地址能填公网IP并用8443端口吗？",
+      "as_asked": "云盘回调地址能填公网IP并用8443端口吗？",
+      "is_frozen_question": true,
+      "strategy": "anchors_3",
+      "archived_grounding_status": "model_refused",
+      "context_chunk_count": 3,
+      "sources": [
+        {
+          "id": 1,
+          "filename": "星桥工单与云盘集成配置说明.md",
+          "knowledge_base": "评估-synthetic-v1-产品与客服",
+          "content_sha256": "2ac533382b2c0e67c1de336c6102b4731242ad0df4a62cccdb7c1ef35ef7a972",
+          "content_chars": 800
+        },
+        {
+          "id": 2,
+          "filename": "星桥云盘 Webhook 事件回调说明.md",
+          "knowledge_base": "评估-synthetic-v1-产品与客服",
+          "content_sha256": "a6d7c3f292b8a6b7dd5f8ff6370e01988604acb36d1fac41fadece1fd668b357",
+          "content_chars": 799
+        },
+        {
+          "id": 3,
+          "filename": "星桥科技 API 通用错误码与重试规范.md",
+          "knowledge_base": "评估-synthetic-v1-产品与客服",
+          "content_sha256": "3f6a5565fc7cef9f194c554981644ffb67b17f5239b7fb8d584910572a712a2c",
+          "content_chars": 634
+        }
+      ],
+      "evidence_quotes_visible": [
+        {
+          "fact": "端口固定 443，不支持自定义端口",
+          "source": "星桥云盘 Webhook 事件回调说明.md",
+          "quote": "端口固定 443，不支持自定义端口",
+          "visible_in_source_ids": [
+            2
+          ]
+        },
+        {
+          "fact": "地址必须是公网可解析的域名，不接受 IP 直连",
+          "source": "星桥云盘 Webhook 事件回调说明.md",
+          "quote": "地址必须是公网可解析的域名，不接受 IP 直连",
+          "visible_in_source_ids": [
+            2
+          ]
+        }
+      ],
+      "raw_model_response": {
+        "answerable": false,
+        "claims": [],
+        "unanswered_questions": [
+          "云盘回调地址能否填公网IP",
+          "云盘回调地址能否使用8443端口"
+        ]
+      },
+      "answerable": false,
+      "claims_count": 0,
+      "model_unanswered_questions": [
+        "云盘回调地址能否填公网IP",
+        "云盘回调地址能否使用8443端口"
+      ],
+      "error": null,
+      "latency_ms": 2692.9
+    },
+    {
+      "id": "NEW-09",
+      "frozen_question": "云盘回调地址能填公网IP并用8443端口吗？",
+      "as_asked": "云盘回调地址能填公网IP并用8443端口吗？",
+      "is_frozen_question": true,
+      "strategy": "neighbors_8",
+      "archived_grounding_status": "model_refused",
+      "context_chunk_count": 8,
+      "sources": [
+        {
+          "id": 1,
+          "filename": "星桥工单与云盘集成配置说明.md",
+          "knowledge_base": "评估-synthetic-v1-产品与客服",
+          "content_sha256": "2ac533382b2c0e67c1de336c6102b4731242ad0df4a62cccdb7c1ef35ef7a972",
+          "content_chars": 800
+        },
+        {
+          "id": 2,
+          "filename": "星桥云盘 Webhook 事件回调说明.md",
+          "knowledge_base": "评估-synthetic-v1-产品与客服",
+          "content_sha256": "a6d7c3f292b8a6b7dd5f8ff6370e01988604acb36d1fac41fadece1fd668b357",
+          "content_chars": 799
+        },
+        {
+          "id": 3,
+          "filename": "星桥科技 API 通用错误码与重试规范.md",
+          "knowledge_base": "评估-synthetic-v1-产品与客服",
+          "content_sha256": "3f6a5565fc7cef9f194c554981644ffb67b17f5239b7fb8d584910572a712a2c",
+          "content_chars": 634
+        },
+        {
+          "id": 4,
+          "filename": "星桥工单与云盘集成配置说明.md",
+          "knowledge_base": "评估-synthetic-v1-产品与客服",
+          "content_sha256": "289b994f9bef84bde2920f7abc3d4eaed78968e8ea508db8c7fd13ce54239ee8",
+          "content_chars": 800
+        },
+        {
+          "id": 5,
+          "filename": "星桥云盘 Webhook 事件回调说明.md",
+          "knowledge_base": "评估-synthetic-v1-产品与客服",
+          "content_sha256": "48302781e2bfd3a40f0d7416985d0574b650ef3d2b0251c9d9cfe49e1a7ec352",
+          "content_chars": 800
+        },
+        {
+          "id": 6,
+          "filename": "星桥科技 API 通用错误码与重试规范.md",
+          "knowledge_base": "评估-synthetic-v1-产品与客服",
+          "content_sha256": "54d9975f583b8c4fd94a637d34825c13f159649de38f6b7bd0c6dc50e51d3d52",
+          "content_chars": 799
+        },
+        {
+          "id": 7,
+          "filename": "星桥工单与云盘集成配置说明.md",
+          "knowledge_base": "评估-synthetic-v1-产品与客服",
+          "content_sha256": "7a0d1fd263f96d416befbf9d9ddb620ad8a7728548f43ce11cfae9da468b065f",
+          "content_chars": 370
+        },
+        {
+          "id": 8,
+          "filename": "星桥云盘 Webhook 事件回调说明.md",
+          "knowledge_base": "评估-synthetic-v1-产品与客服",
+          "content_sha256": "c2d935b38b10fa432b19c86e52580be576d05f1be73d1c3d9caf797885070f52",
+          "content_chars": 800
+        }
+      ],
+      "evidence_quotes_visible": [
+        {
+          "fact": "端口固定 443，不支持自定义端口",
+          "source": "星桥云盘 Webhook 事件回调说明.md",
+          "quote": "端口固定 443，不支持自定义端口",
+          "visible_in_source_ids": [
+            2,
+            5
+          ]
+        },
+        {
+          "fact": "地址必须是公网可解析的域名，不接受 IP 直连",
+          "source": "星桥云盘 Webhook 事件回调说明.md",
+          "quote": "地址必须是公网可解析的域名，不接受 IP 直连",
+          "visible_in_source_ids": [
+            2,
+            5
+          ]
+        }
+      ],
+      "raw_model_response": {
+        "answerable": false,
+        "claims": [],
+        "unanswered_questions": [
+          "云盘回调地址能否填写公网IP",
+          "云盘回调地址能否使用8443端口"
+        ]
+      },
+      "answerable": false,
+      "claims_count": 0,
+      "model_unanswered_questions": [
+        "云盘回调地址能否填写公网IP",
+        "云盘回调地址能否使用8443端口"
+      ],
+      "error": null,
+      "latency_ms": 1779.41
+    }
+  ]
+}

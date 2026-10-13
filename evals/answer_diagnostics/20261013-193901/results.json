@@ -1,0 +1,100 @@
+{
+  "metadata": {
+    "purpose": "NEW-09 control probe: compound affirmative polarity on frozen context; not a regression result",
+    "question_id": "NEW-09",
+    "replay_source": "evals/context_runs/20261013-180519/results.json",
+    "model": "qwen-plus",
+    "temperature": 0,
+    "calls_budget": 6,
+    "probe_questions": [
+      "云盘回调必须使用HTTPS并用443端口吗？"
+    ],
+    "counts_as_regression": false,
+    "note": "Sources reconstructed from the archived row; no retrieval re-run. unanswered_questions is retained here because the refusal path drops it."
+  },
+  "rows": [
+    {
+      "id": "NEW-09",
+      "frozen_question": "云盘回调地址能填公网IP并用8443端口吗？",
+      "as_asked": "云盘回调必须使用HTTPS并用443端口吗？",
+      "is_frozen_question": false,
+      "strategy": "probe:anchors_3",
+      "archived_grounding_status": "model_refused",
+      "context_chunk_count": 3,
+      "sources": [
+        {
+          "id": 1,
+          "filename": "星桥工单与云盘集成配置说明.md",
+          "knowledge_base": "评估-synthetic-v1-产品与客服",
+          "content_sha256": "2ac533382b2c0e67c1de336c6102b4731242ad0df4a62cccdb7c1ef35ef7a972",
+          "content_chars": 800
+        },
+        {
+          "id": 2,
+          "filename": "星桥云盘 Webhook 事件回调说明.md",
+          "knowledge_base": "评估-synthetic-v1-产品与客服",
+          "content_sha256": "a6d7c3f292b8a6b7dd5f8ff6370e01988604acb36d1fac41fadece1fd668b357",
+          "content_chars": 799
+        },
+        {
+          "id": 3,
+          "filename": "星桥科技 API 通用错误码与重试规范.md",
+          "knowledge_base": "评估-synthetic-v1-产品与客服",
+          "content_sha256": "3f6a5565fc7cef9f194c554981644ffb67b17f5239b7fb8d584910572a712a2c",
+          "content_chars": 634
+        }
+      ],
+      "evidence_quotes_visible": [
+        {
+          "fact": "端口固定 443，不支持自定义端口",
+          "source": "星桥云盘 Webhook 事件回调说明.md",
+          "quote": "端口固定 443，不支持自定义端口",
+          "visible_in_source_ids": [
+            2
+          ]
+        },
+        {
+          "fact": "地址必须是公网可解析的域名，不接受 IP 直连",
+          "source": "星桥云盘 Webhook 事件回调说明.md",
+          "quote": "地址必须是公网可解析的域名，不接受 IP 直连",
+          "visible_in_source_ids": [
+            2
+          ]
+        }
+      ],
+      "raw_model_response": {
+        "answerable": true,
+        "claims": [
+          {
+            "text": "云盘回调必须使用HTTPS。",
+            "evidence": [
+              {
+                "source_id": 2,
+                "quote": "回调地址必须使用 HTTPS，端口固定 443，不支持自定义端口。"
+              }
+            ]
+          },
+          {
+            "text": "云盘回调必须使用443端口。",
+            "evidence": [
+              {
+                "source_id": 2,
+                "quote": "回调地址必须使用 HTTPS，端口固定 443，不支持自定义端口。"
+              },
+              {
+                "source_id": 1,
+                "quote": "| 回调端口 | 443 | 固定 | 仅支持 HTTPS |"
+              }
+            ]
+          }
+        ],
+        "unanswered_questions": []
+      },
+      "answerable": true,
+      "claims_count": 2,
+      "model_unanswered_questions": [],
+      "error": null,
+      "latency_ms": 4990.81
+    }
+  ]
+}
