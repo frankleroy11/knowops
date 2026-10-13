@@ -1,0 +1,169 @@
+"""Authorization rules: who may read or write which knowledge base.
+
+`AUTH_MODE=off` keeps the historical single-user behaviour: every request is the
+local administrator. Any other value enforces bearer tokens, so an unauthenticated
+request fails closed with 401 instead of silently falling back.
+"""
+
+from datetime import datetime
+
+from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
+from app.modules.auth.models import KB_ROLES, ROLES, ApiToken, KbMember, User
+from app.modules.auth.principal import ADMIN, LOCAL_ADMIN, Principal
+from app.modules.auth.security import generate_token, hash_token
+from app.modules.knowledge.models import KnowledgeBase
+
+WRITE_KB_ROLES = ("owner", "editor")
+ENFORCED = "enforced"
+
+
+def auth_mode() -> str:
+    return get_settings().auth_mode
+
+
+def default_principal() -> Principal:
+    """Principal for callers that never went through the HTTP dependency."""
+    if auth_mode() == ENFORCED:
+        raise HTTPException(401, "需要登录")
+    return LOCAL_ADMIN
+
+
+def _bearer_token(authorization: str | None) -> str | None:
+    if not authorization:
+        return None
+    parts = authorization.split(None, 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+    return parts[1].strip() or None
+
+
+def resolve_principal(db: Session | None, authorization: str | None) -> Principal:
+    if auth_mode() != ENFORCED:
+        return LOCAL_ADMIN
+    token = _bearer_token(authorization)
+    if token is None or db is None:
+        raise HTTPException(401, "需要登录")
+    record = db.scalar(select(ApiToken).where(ApiToken.token_hash == hash_token(token)))
+    if record is None or record.revoked_at is not None:
+        raise HTTPException(401, "凭据无效")
+    user = db.get(User, record.user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(401, "凭据无效")
+    record.last_used_at = datetime.now()
+    db.commit()
+    return Principal(
+        id=user.id,
+        email=user.email,
+        role=user.role,
+        display_name=user.display_name,
+    )
+
+
+def create_user(db: Session, email: str, role: str, display_name: str = "") -> User:
+    email = email.strip().lower()
+    if role not in ROLES:
+        raise HTTPException(422, f"角色必须是 {', '.join(ROLES)}")
+    if db.scalar(select(User).where(User.email == email)) is not None:
+        raise HTTPException(409, "用户已存在")
+    user = User(email=email, display_name=display_name.strip() or email, role=role)
+    db.add(user)
+    db.commit()
+    return user
+
+
+def set_user_role(db: Session, email: str, role: str) -> User:
+    if role not in ROLES:
+        raise HTTPException(422, f"角色必须是 {', '.join(ROLES)}")
+    user = db.scalar(select(User).where(User.email == email.strip().lower()))
+    if user is None:
+        raise HTTPException(404, "用户不存在")
+    user.role = role
+    db.commit()
+    return user
+
+
+def issue_token(db: Session, user: User, label: str = "") -> str:
+    raw = generate_token()
+    db.add(ApiToken(user_id=user.id, token_hash=hash_token(raw), label=label.strip()))
+    db.commit()
+    return raw
+
+
+def revoke_tokens(db: Session, user: User) -> int:
+    tokens = list(db.scalars(select(ApiToken).where(ApiToken.user_id == user.id)))
+    revoked = 0
+    for token in tokens:
+        if token.revoked_at is None:
+            token.revoked_at = datetime.now()
+            revoked += 1
+    db.commit()
+    return revoked
+
+
+def ensure_membership(db: Session, kb_id: int, user_id: int, role: str) -> KbMember:
+    if role not in KB_ROLES:
+        raise HTTPException(422, f"知识库角色必须是 {', '.join(KB_ROLES)}")
+    member = db.scalar(
+        select(KbMember).where(KbMember.kb_id == kb_id, KbMember.user_id == user_id)
+    )
+    if member is None:
+        member = KbMember(kb_id=kb_id, user_id=user_id, role=role)
+        db.add(member)
+    else:
+        member.role = role
+    db.commit()
+    return member
+
+
+def authorized_kb_ids(db: Session, principal: Principal) -> list[int]:
+    """Knowledge bases the caller may read; used as the only source for scope=all."""
+    if principal.is_admin:
+        return list(db.scalars(select(KnowledgeBase.id).order_by(KnowledgeBase.id)))
+    if principal.id is None:
+        return []
+    return list(
+        db.scalars(
+            select(KbMember.kb_id)
+            .where(KbMember.user_id == principal.id)
+            .order_by(KbMember.kb_id)
+        )
+    )
+
+
+def kb_permission(db: Session, principal: Principal, kb_id: int) -> str | None:
+    """Return "write", "read" or None when the caller has no access at all."""
+    if principal.is_admin:
+        return "write"
+    if principal.id is None:
+        return None
+    member = db.scalar(
+        select(KbMember).where(KbMember.kb_id == kb_id, KbMember.user_id == principal.id)
+    )
+    if member is None:
+        return None
+    return "write" if member.role in WRITE_KB_ROLES else "read"
+
+
+def require_kb(db: Session, principal: Principal, kb_id: int, need: str = "read") -> None:
+    """404 when the knowledge base does not exist, 403 when access is missing."""
+    if db.get(KnowledgeBase, kb_id) is None:
+        raise HTTPException(404, "知识库不存在")
+    granted = kb_permission(db, principal, kb_id)
+    if granted is None:
+        raise HTTPException(403, "无权访问该知识库")
+    if need == "write" and granted != "write":
+        raise HTTPException(403, "无权修改该知识库")
+
+
+def require_author(principal: Principal) -> None:
+    if not principal.can_author:
+        raise HTTPException(403, "需要知识管理员或管理员权限")
+
+
+def require_admin(principal: Principal) -> None:
+    if principal.role != ADMIN:
+        raise HTTPException(403, "需要管理员权限")

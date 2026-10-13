@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -11,10 +11,8 @@ class KnowledgeBase(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(128), unique=True)
     description: Mapped[str] = mapped_column(String(512), default="")
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-
-
-from sqlalchemy import ForeignKey, Integer, Text, UniqueConstraint
 
 
 class Document(Base):
@@ -22,6 +20,7 @@ class Document(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     knowledge_base_id: Mapped[int] = mapped_column(ForeignKey("knowledge_bases.id"), index=True)
     filename: Mapped[str] = mapped_column(String(255))
+    uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     llm_base_url: str = ""
     llm_model: str = ""
 
+    # --- 认证与授权 ---
+    # off = 单机开发模式，所有请求视为本地管理员（保持历史行为）
+    # enforced = 必须携带 Authorization: Bearer <token>，否则 401
+    auth_mode: str = "off"
+
     # --- Embedding 适配器 ---
     # provider: bge_m3 = 真实本地模型；hash = 无模型依赖的确定性假向量，仅用于测试与离线开发
     embedder_provider: str = "bge_m3"

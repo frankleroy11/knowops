@@ -1,0 +1,42 @@
+"""Identity tables: users, API tokens and per-knowledge-base membership."""
+
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.session import Base
+
+ROLES = ("admin", "editor", "viewer")
+KB_ROLES = ("owner", "editor", "viewer")
+
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True)
+    display_name: Mapped[str] = mapped_column(String(128), default="")
+    role: Mapped[str] = mapped_column(String(32), default="viewer")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class ApiToken(Base):
+    __tablename__ = "api_tokens"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    label: Mapped[str] = mapped_column(String(128), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class KbMember(Base):
+    __tablename__ = "kb_members"
+    __table_args__ = (UniqueConstraint("kb_id", "user_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kb_id: Mapped[int] = mapped_column(ForeignKey("knowledge_bases.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    role: Mapped[str] = mapped_column(String(32), default="viewer")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
