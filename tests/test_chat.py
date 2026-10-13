@@ -41,7 +41,7 @@ def model_answer(claims=None, **kwargs):
                 claims=[
                     {
                         "text": "申请账号",
-                        "evidence": [{"source_id": 99, "quote": "先申请 VPN 账号"}],
+                        "evidence": [{"source_id": 99, "quote": "资料中不存在的证据"}],
                     }
                 ]
             ),
@@ -178,3 +178,57 @@ def test_free_answer_outside_claims_is_rejected():
     ):
         answer_question(BODY, HITS)
     assert error.value.status_code == 502
+
+
+def test_real_wrong_id_regression_resolves_only_unique_exact_quotes():
+    from app.core.config import ROOT
+
+    diagnostic = json.loads((ROOT / "evals/citation_runs/source-id-diagnostic.json").read_text())
+    original = json.loads((ROOT / diagnostic["context_source"]).read_text())
+    row = next(r for r in original["rows"] if r["id"] == "NEW-03" and r["strategy"] == "dense_3")
+    with patch(
+        "app.modules.chat.router.generate_grounded_answer",
+        return_value=diagnostic["raw_generation"],
+    ):
+        result = answer_question(BODY, row["selected_hits"])
+    assert result["answerable"] is True
+    assert result["source_id_corrections"] == [
+        {"claim_index": 0, "model_source_id": 5, "source_id": 1},
+        {"claim_index": 0, "model_source_id": 12, "source_id": 3},
+    ]
+    assert [c["source_id"] for c in result["citations"]] == [2, 1, 3]
+    assert [c["chunk_id"] for c in result["citations"]] == [
+        row["selected_hits"][i - 1]["chunk_id"] for i in [2, 1, 3]
+    ]
+
+
+def test_ambiguous_quote_does_not_repair_invalid_id():
+    hits = HITS + [{**HITS[0], "chunk_id": 6}]
+    response = model_answer(
+        [{"text": "申请账号", "evidence": [{"source_id": 99, "quote": "先申请 VPN 账号"}]}]
+    )
+    with patch("app.modules.chat.router.generate_grounded_answer", return_value=response):
+        result = answer_question(BODY, hits)
+    assert result["grounding_status"] == "invalid_source"
+    assert result["citations"] == []
+
+
+def test_correct_id_with_repeated_quote_is_preserved():
+    with patch("app.modules.chat.router.generate_grounded_answer", return_value=model_answer()):
+        result = answer_question(BODY, HITS + [{**HITS[0], "chunk_id": 6}])
+    assert result["answerable"]
+    assert result["source_id_corrections"] == []
+    assert [c["chunk_id"] for c in result["citations"]] == [5]
+
+
+def test_in_range_wrong_source_can_only_repair_unique_quote():
+    hits = HITS + [{"content": "有效期 2 小时", "chunk_id": 6}]
+    response = model_answer(
+        [{"text": "有效期2小时", "evidence": [{"source_id": 1, "quote": "有效期 2 小时"}]}]
+    )
+    with patch("app.modules.chat.router.generate_grounded_answer", return_value=response):
+        result = answer_question(BODY, hits)
+    assert [c["chunk_id"] for c in result["citations"]] == [6]
+    assert result["source_id_corrections"] == [
+        {"claim_index": 0, "model_source_id": 1, "source_id": 2}
+    ]

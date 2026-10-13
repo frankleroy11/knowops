@@ -86,26 +86,44 @@ def answer_question(body: AskRequest, hits: list[dict]):
         return refuse("incomplete_answer")
     if not generated.claims:
         return refuse("missing_claims")
-    ids, claims = [], []
-    for claim in generated.claims:
+    ids, claims, corrections = [], [], []
+    for claim_index, claim in enumerate(generated.claims):
         if not claim.text.strip():
             return refuse("invalid_evidence")
         evidence = []
         for item in claim.evidence:
-            if item.source_id < 1 or item.source_id > len(sources):
-                return refuse("invalid_source")
             quote = normalize_quote(item.quote)
-            # Validate against exactly the bounded context seen by the model.
-            if not quote or quote not in normalize_quote(sources[item.source_id - 1]["content"]):
+            if not quote:
                 return refuse("invalid_evidence")
-            if item.source_id not in ids:
-                ids.append(item.source_id)
-            evidence.append(item.model_dump())
+            source_id = item.source_id
+            valid_id = 1 <= source_id <= len(sources)
+            if not valid_id or quote not in normalize_quote(sources[source_id - 1]["content"]):
+                # Recover only from a unique exact quote in the actual bounded context.
+                # Never search other documents, infer an ID, or accept fuzzy evidence.
+                matches = [
+                    source["id"]
+                    for source in sources
+                    if quote in normalize_quote(source["content"])
+                ]
+                if len(matches) != 1:
+                    return refuse("invalid_source" if not valid_id else "invalid_evidence")
+                source_id = matches[0]
+                corrections.append(
+                    {
+                        "claim_index": claim_index,
+                        "model_source_id": item.source_id,
+                        "source_id": source_id,
+                    }
+                )
+            if source_id not in ids:
+                ids.append(source_id)
+            evidence.append({"source_id": source_id, "quote": item.quote})
         claims.append({"text": claim.text.strip(), "evidence": evidence})
     return {
         "answer": "\n".join(c["text"] for c in claims),
         "answerable": True,
         "claims": claims,
+        "source_id_corrections": corrections,
         "grounding_status": "quotes_validated",
         "citations": [{"source_id": i, **selected[i - 1]} for i in ids],
     }
