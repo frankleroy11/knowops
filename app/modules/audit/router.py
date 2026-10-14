@@ -1,4 +1,4 @@
-"""Administrator access to the audit trail."""
+"""Audit trail access, partitioned by tenant."""
 
 from typing import Annotated
 
@@ -17,6 +17,7 @@ class AuditOut(BaseModel):
     id: int
     actor_id: int | None
     actor_email: str
+    tenant_id: int | None
     action: str
     object_type: str
     object_id: int | None
@@ -32,16 +33,24 @@ def list_audit_logs(
     offset: Annotated[int, QueryParam(ge=0)] = 0,
     action: str | None = None,
     object_type: str | None = None,
+    tenant_id: int | None = None,
 ):
-    """Platform administrators only: rows are not yet partitioned by tenant, so a
-    tenant administrator must not be able to read another tenant's trail."""
-    if not principal.is_platform_admin:
-        raise HTTPException(403, "需要平台管理员权限")
+    """Platform administrators see every tenant (optionally filtered);
+    tenant administrators only ever see their own trail."""
+    if principal.is_platform_admin:
+        scope = tenant_id
+    else:
+        if principal.tenant_id is None:
+            raise HTTPException(403, "当前账号未绑定租户")
+        if tenant_id is not None and tenant_id != principal.tenant_id:
+            raise HTTPException(403, "无权查看其他租户的审计日志")
+        scope = principal.tenant_id
     return [
         AuditOut(
             id=entry.id,
             actor_id=entry.actor_id,
             actor_email=entry.actor_email,
+            tenant_id=entry.tenant_id,
             action=entry.action,
             object_type=entry.object_type,
             object_id=entry.object_id,
@@ -49,6 +58,11 @@ def list_audit_logs(
             created_at=entry.created_at.isoformat() if entry.created_at else None,
         )
         for entry in audit.list_entries(
-            db, limit=limit, offset=offset, action=action, object_type=object_type
+            db,
+            limit=limit,
+            offset=offset,
+            action=action,
+            object_type=object_type,
+            tenant_id=scope,
         )
     ]

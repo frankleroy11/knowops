@@ -215,10 +215,39 @@ def test_user_administration_is_tenant_scoped(client, enforced):
     ).json()["tenant_id"] == 1
     assert client.post("/api/v1/admin/users/4/tokens", headers=auth("t1admin")).status_code == 404
 
-def test_only_platform_admin_reads_the_audit_trail(client, enforced):
-    """Rows are not partitioned per tenant yet, so tenant admins must be refused."""
-    assert client.get("/api/v1/admin/audit-logs", headers=auth("t1admin")).status_code == 403
-    assert client.get("/api/v1/admin/audit-logs", headers=auth("platform")).status_code == 200
+def test_audit_trail_is_partitioned_by_tenant(client, enforced, db_factory):
+    """Each entry belongs to the tenant that owns the affected object, so a tenant
+    administrator can read their own trail and never another tenant's."""
+    client.post("/api/v1/knowledge-bases", json={"name": "审计库-T1"}, headers=auth("t1admin"))
+    client.post("/api/v1/knowledge-bases", json={"name": "审计库-T2"}, headers=auth("t2editor"))
+
+    tenant_rows = client.get("/api/v1/admin/audit-logs", headers=auth("t1admin"))
+    assert tenant_rows.status_code == 200
+    assert {row["tenant_id"] for row in tenant_rows.json()} == {1}
+    assert {row["action"] for row in tenant_rows.json()} == {"kb.create"}
+
+    every = client.get("/api/v1/admin/audit-logs", headers=auth("platform")).json()
+    assert {row["tenant_id"] for row in every} == {1, 2}
+    only_two = client.get("/api/v1/admin/audit-logs?tenant_id=2", headers=auth("platform")).json()
+    assert {row["tenant_id"] for row in only_two} == {2}
+    assert client.get("/api/v1/admin/audit-logs?tenant_id=2", headers=auth("t1admin")).status_code == 403
+    assert client.get("/api/v1/admin/audit-logs", headers=auth("t1user")).status_code == 403
+
+
+def test_audit_entry_follows_the_object_not_the_actor(client, enforced, db_factory):
+    """A platform administrator acting inside tenant 2 must leave a row tenant 2 can see."""
+    with db_factory() as db:
+        rows = list(db.scalars(select(AuditLog).where(AuditLog.action == "kb.create")))
+    assert rows == []  # nothing recorded yet in this test's database
+    client.post(
+        "/api/v1/knowledge-bases",
+        json={"name": "跨租户审计库", "tenant_id": 2},
+        headers=auth("platform"),
+    )
+    with db_factory() as db:
+        entry = db.scalar(select(AuditLog).where(AuditLog.action == "kb.create"))
+        assert entry.tenant_id == 2
+        assert entry.actor_id == 1  # the platform administrator
 
 
 def test_only_platform_admin_manages_tenants(client, enforced, db_factory):

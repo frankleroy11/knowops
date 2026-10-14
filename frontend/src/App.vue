@@ -13,11 +13,12 @@ const token = ref(localStorage.getItem(TOKEN_KEY) || '')
 const me = ref(null), needsLogin = ref(false), loginToken = ref(''), loginError = ref(''), busyLogin = ref(false), ssoEnabled = ref(false)
 const loginEmail = ref(''), loginPassword = ref(''), busyPassword = ref(false)
 
-const showAdmin = ref(false), users = ref([]), adminForm = ref({email: '', display_name: '', role: 'viewer'})
+const showAdmin = ref(false), users = ref([]), adminForm = ref({email: '', display_name: '', role: 'viewer', tenant_id: ''})
+const tenants = ref([]), tenantForm = ref({name: '', slug: ''})
 const issuedToken = ref(''), adminBusy = ref(false)
 const showMembers = ref(false), members = ref([]), memberForm = ref({email: '', role: 'viewer'})
 const showReviews = ref(false), reviews = ref([]), reviewNote = ref('')
-const showAudit = ref(false), auditLogs = ref([])
+const showAudit = ref(false), auditLogs = ref([]), auditTenant = ref('')
 
 const unified = computed(() => selected.value === 'all')
 const kb = computed(() => kbs.value.find(k => k.id === selected.value))
@@ -180,16 +181,40 @@ async function bootstrap() {
   } finally { loading.value = false }
 }
 
+async function loadTenants() {
+  if (!me.value?.is_platform_admin) { tenants.value = []; return }
+  try { tenants.value = await api('/admin/tenants') } catch (e) { tenants.value = [] }
+}
+async function createTenant() {
+  if (!tenantForm.value.name.trim() || !tenantForm.value.slug.trim()) return
+  adminBusy.value = true; error.value = ''
+  try {
+    const created = await api('/admin/tenants', json({name: tenantForm.value.name.trim(), slug: tenantForm.value.slug.trim()}))
+    tenantForm.value = {name: '', slug: ''}
+    await loadTenants()
+    notice.value = `已创建租户 ${created.name}（id=${created.id}）`
+  } catch (e) { fail(e) } finally { adminBusy.value = false }
+}
+async function setUserTenant(u, value) {
+  adminBusy.value = true; error.value = ''
+  try {
+    await api(`/admin/users/${u.id}`, patch({tenant_id: value === '' ? null : Number(value)}))
+    await openAdmin()
+  } catch (e) { fail(e); await openAdmin() } finally { adminBusy.value = false }
+}
 async function openAdmin() {
   showAdmin.value = true; issuedToken.value = ''; adminBusy.value = true
-  try { users.value = await api('/admin/users') } catch (e) { fail(e) } finally { adminBusy.value = false }
+  try { users.value = await api('/admin/users'); await loadTenants() } catch (e) { fail(e) } finally { adminBusy.value = false }
 }
 async function createUser() {
   if (!adminForm.value.email.trim()) return
   adminBusy.value = true; error.value = ''
   try {
-    const data = await api('/admin/users', json({...adminForm.value, email: adminForm.value.email.trim()}))
-    adminForm.value = {email: '', display_name: '', role: 'viewer'}
+    const payload = {...adminForm.value, email: adminForm.value.email.trim()}
+    if (payload.tenant_id === '') delete payload.tenant_id
+    else payload.tenant_id = Number(payload.tenant_id)
+    const data = await api('/admin/users', json(payload))
+    adminForm.value = {email: '', display_name: '', role: 'viewer', tenant_id: ''}
     await openAdmin()
     notice.value = `已创建用户 ${data.email}；需要登录凭证时请点击该行的“签发 Token”。`
   } catch (e) { fail(e) } finally { adminBusy.value = false }
@@ -288,7 +313,8 @@ async function toggleKbReview() {
 }
 async function openAudit() {
   showAudit.value = true; adminBusy.value = true
-  try { auditLogs.value = await api('/admin/audit-logs?limit=50') } catch (e) { fail(e) } finally { adminBusy.value = false }
+  const query = auditTenant.value === '' ? '' : `&tenant_id=${auditTenant.value}`
+  try { auditLogs.value = await api(`/admin/audit-logs?limit=50${query}`) } catch (e) { fail(e) } finally { adminBusy.value = false }
 }
 
 onMounted(async () => {
@@ -456,13 +482,26 @@ onUnmounted(() => clearInterval(timer))
   <section role="dialog" aria-modal="true" aria-label="用户管理" class="modal wide">
     <div class="modal-heading"><h2>用户管理</h2><button type="button" class="icon" @click="showAdmin=false" aria-label="关闭">×</button></div>
     <p>管理员可创建用户、签发与吊销 Token、调整角色；Token 只在签发时显示一次。</p>
-    <div class="document-actions"><button v-if="me?.is_platform_admin" type="button" class="api-link" @click="openAudit">查看审计日志</button></div>
+    <div class="document-actions"><button v-if="isAdmin" type="button" class="api-link" @click="openAudit">查看审计日志</button></div>
     <form class="inline-form" @submit.prevent="createUser">
       <input v-model="adminForm.email" type="email" required placeholder="邮箱" aria-label="用户邮箱">
       <input v-model="adminForm.display_name" placeholder="显示名（可选）" aria-label="显示名">
       <select v-model="adminForm.role" aria-label="全局角色"><option value="viewer">viewer</option><option value="editor">editor</option><option value="admin">admin</option></select>
+      <select v-if="tenants.length" v-model="adminForm.tenant_id" aria-label="所属租户">
+        <option value="">所属租户：默认</option>
+        <option v-for="t in tenants" :key="t.id" :value="t.id">{{t.name}}</option>
+      </select>
       <button class="primary" :disabled="adminBusy||!adminForm.email.trim()">创建用户</button>
     </form>
+    <section v-if="me?.is_platform_admin" class="tenant-admin">
+      <h3>租户</h3>
+      <form class="inline-form" @submit.prevent="createTenant">
+        <input v-model="tenantForm.name" required placeholder="租户名称" aria-label="租户名称">
+        <input v-model="tenantForm.slug" required placeholder="租户标识（英文小写）" aria-label="租户标识">
+        <button class="primary" :disabled="adminBusy||!tenantForm.name.trim()||!tenantForm.slug.trim()">创建租户</button>
+      </form>
+      <p class="tenant-list">现有租户：<span v-for="t in tenants" :key="t.id" class="badge">{{t.name}}（{{t.slug}}）</span></p>
+    </section>
     <div v-if="issuedToken" class="token-callout">
       <b>新 Token（仅显示一次）</b>
       <code>{{issuedToken}}</code>
@@ -470,7 +509,7 @@ onUnmounted(() => clearInterval(timer))
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>用户</th><th>角色</th><th>状态</th><th>有效 Token</th><th>操作</th></tr></thead>
+        <thead><tr><th>用户</th><th>角色</th><th>租户</th><th>状态</th><th>有效 Token</th><th>操作</th></tr></thead>
         <tbody>
           <tr v-for="u in users" :key="u.id">
             <td>{{u.display_name}}<small>{{u.email}}</small></td>
@@ -478,6 +517,13 @@ onUnmounted(() => clearInterval(timer))
               <select :value="u.role" :disabled="adminBusy" @change="setUserRole(u,$event.target.value)" aria-label="调整角色">
                 <option value="viewer">viewer</option><option value="editor">editor</option><option value="admin">admin</option>
               </select>
+            </td>
+            <td>
+              <select v-if="me?.is_platform_admin" :value="u.tenant_id ?? ''" :disabled="adminBusy" @change="setUserTenant(u,$event.target.value)" aria-label="调整租户">
+                <option value="">平台级</option>
+                <option v-for="t in tenants" :key="t.id" :value="t.id">{{t.name}}</option>
+              </select>
+              <span v-else class="badge">{{u.tenant_id ?? '—'}}</span>
             </td>
             <td><span class="badge" :class="{ready:u.is_active}">{{u.is_active?'启用':'停用'}}</span></td>
             <td>{{u.active_tokens}}</td>
@@ -523,14 +569,21 @@ onUnmounted(() => clearInterval(timer))
 <div v-if="showAudit" class="overlay" @click.self="showAudit=false">
   <section role="dialog" aria-modal="true" aria-label="审计日志" class="modal wide">
     <div class="modal-heading"><h2>审计日志 · 最近 50 条</h2><button type="button" class="icon" @click="showAudit=false" aria-label="关闭">×</button></div>
-    <p>记录谁在何时对哪个对象做了什么；操作者身份以文本快照保存，用户改名或删除后仍可追溯。</p>
+    <p>记录谁在何时对哪个对象做了什么；操作者身份以文本快照保存，用户改名或删除后仍可追溯。租户管理员只能看到本租户记录。</p>
+    <div v-if="me?.is_platform_admin" class="document-actions">
+      <select v-model="auditTenant" @change="openAudit" aria-label="按租户筛选">
+        <option value="">全部租户</option>
+        <option v-for="t in tenants" :key="t.id" :value="t.id">{{t.name}}</option>
+      </select>
+    </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>对象</th><th>详情</th></tr></thead>
+        <thead><tr><th>时间</th><th>操作者</th><th>租户</th><th>动作</th><th>对象</th><th>详情</th></tr></thead>
         <tbody>
           <tr v-for="a in auditLogs" :key="a.id">
             <td>{{(a.created_at||'').replace('T',' ').slice(0,19)}}</td>
             <td>{{a.actor_email || '本地管理员'}}</td>
+            <td>{{a.tenant_id ?? '平台级'}}</td>
             <td><span class="badge">{{a.action}}</span></td>
             <td>{{a.object_type}}{{a.object_id ? '#'+a.object_id : ''}}</td>
             <td>{{a.detail}}</td>
