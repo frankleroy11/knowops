@@ -60,16 +60,24 @@ def resolve_principal(db: Session | None, authorization: str | None) -> Principa
         email=user.email,
         role=user.role,
         display_name=user.display_name,
+        tenant_id=user.tenant_id,
     )
 
 
-def create_user(db: Session, email: str, role: str, display_name: str = "") -> User:
+def create_user(
+    db: Session, email: str, role: str, display_name: str = "", tenant_id: int | None = None
+) -> User:
     email = email.strip().lower()
     if role not in ROLES:
         raise HTTPException(422, f"角色必须是 {', '.join(ROLES)}")
     if db.scalar(select(User).where(User.email == email)) is not None:
         raise HTTPException(409, "用户已存在")
-    user = User(email=email, display_name=display_name.strip() or email, role=role)
+    user = User(
+        email=email,
+        display_name=display_name.strip() or email,
+        role=role,
+        tenant_id=tenant_id,
+    )
     db.add(user)
     db.commit()
     return user
@@ -139,15 +147,34 @@ def ensure_membership(db: Session, kb_id: int, user_id: int, role: str) -> KbMem
 
 
 def authorized_kb_ids(db: Session, principal: Principal) -> list[int]:
-    """Knowledge bases the caller may read; used as the only source for scope=all."""
-    if principal.is_admin:
+    """Knowledge bases the caller may read; the only source for scope=all.
+
+    Platform admins reach every tenant; tenant members are limited to their own
+    tenant even if a stale membership row exists elsewhere.
+    """
+    if principal.is_platform_admin:
         return list(db.scalars(select(KnowledgeBase.id).order_by(KnowledgeBase.id)))
+    if principal.tenant_id is None:
+        return []
+    if principal.is_admin:
+        # A tenant admin administers every knowledge base of their own tenant.
+        return list(
+            db.scalars(
+                select(KnowledgeBase.id)
+                .where(KnowledgeBase.tenant_id == principal.tenant_id)
+                .order_by(KnowledgeBase.id)
+            )
+        )
     if principal.id is None:
         return []
     return list(
         db.scalars(
             select(KbMember.kb_id)
-            .where(KbMember.user_id == principal.id)
+            .join(KnowledgeBase, KnowledgeBase.id == KbMember.kb_id)
+            .where(
+                KbMember.user_id == principal.id,
+                KnowledgeBase.tenant_id == principal.tenant_id,
+            )
             .order_by(KbMember.kb_id)
         )
     )
@@ -155,6 +182,8 @@ def authorized_kb_ids(db: Session, principal: Principal) -> list[int]:
 
 def kb_permission(db: Session, principal: Principal, kb_id: int) -> str | None:
     """Return "write", "read" or None when the caller has no access at all."""
+    if not has_tenant_access(db, principal, kb_id):
+        return None
     if principal.is_admin:
         return "write"
     if principal.id is None:
@@ -167,10 +196,24 @@ def kb_permission(db: Session, principal: Principal, kb_id: int) -> str | None:
     return "write" if member.role in WRITE_KB_ROLES else "read"
 
 
-def require_kb(db: Session, principal: Principal, kb_id: int, need: str = "read") -> KnowledgeBase:
-    """404 when the knowledge base does not exist, 403 when access is missing."""
+def has_tenant_access(db: Session, principal: Principal, kb_id: int) -> bool:
+    """Platform admins reach every tenant; everyone else only their own."""
+    if principal.is_platform_admin:
+        return True
     kb = db.get(KnowledgeBase, kb_id)
     if kb is None:
+        return False
+    return principal.tenant_id is not None and kb.tenant_id == principal.tenant_id
+
+
+def require_kb(db: Session, principal: Principal, kb_id: int, need: str = "read") -> KnowledgeBase:
+    """404 when the knowledge base is missing or belongs to another tenant,
+    403 when it exists in the caller's tenant but access is missing."""
+    kb = db.get(KnowledgeBase, kb_id)
+    if kb is None:
+        raise HTTPException(404, "知识库不存在")
+    if not has_tenant_access(db, principal, kb_id):
+        # Hide cross-tenant existence instead of disclosing it with 403.
         raise HTTPException(404, "知识库不存在")
     granted = kb_permission(db, principal, kb_id)
     if granted is None:
@@ -214,12 +257,21 @@ def membership_roles(db: Session, principal: Principal) -> dict[int, str]:
         return {}
     return {
         member.kb_id: member.role
-        for member in db.scalars(select(KbMember).where(KbMember.user_id == principal.id))
+        for member in db.scalars(
+            select(KbMember)
+            .join(KnowledgeBase, KnowledgeBase.id == KbMember.kb_id)
+            .where(
+                KbMember.user_id == principal.id,
+                KnowledgeBase.tenant_id == principal.tenant_id,
+            )
+        )
     }
 
 
 def kb_role(db: Session, principal: Principal, kb_id: int) -> str | None:
     """Membership role of the caller ("owner"/"editor"/"viewer"), "admin" for admins."""
+    if not has_tenant_access(db, principal, kb_id):
+        return None
     if principal.is_admin:
         return ADMIN
     if principal.id is None:
@@ -228,6 +280,13 @@ def kb_role(db: Session, principal: Principal, kb_id: int) -> str | None:
         select(KbMember).where(KbMember.kb_id == kb_id, KbMember.user_id == principal.id)
     )
     return member.role if member else None
+
+
+def set_user_tenant(db: Session, user: User, tenant_id: int | None) -> User:
+    """Move a user between tenants; NULL makes the account platform-level."""
+    user.tenant_id = tenant_id
+    db.commit()
+    return user
 
 
 def list_members(db: Session, kb_id: int) -> list[dict]:

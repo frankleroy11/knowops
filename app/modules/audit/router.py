@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi import Query as QueryParam
 from pydantic import BaseModel
 
@@ -33,6 +33,10 @@ def list_audit_logs(
     action: str | None = None,
     object_type: str | None = None,
 ):
+    """Platform administrators only: rows are not yet partitioned by tenant, so a
+    tenant administrator must not be able to read another tenant's trail."""
+    if not principal.is_platform_admin:
+        raise HTTPException(403, "需要平台管理员权限")
     return [
         AuditOut(
             id=entry.id,

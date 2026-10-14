@@ -23,6 +23,7 @@ from app.modules.knowledge.models import (
     KnowledgeBase,
     VectorIndex,
 )
+from app.modules.tenant.models import Tenant
 
 ENFORCED = Settings(auth_mode="enforced")
 TOKENS = {"admin": "admin-token", "editor": "editor-token", "alice": "alice-token", "bob": "bob-token"}
@@ -38,8 +39,9 @@ def db_factory(tmp_path):
     Base.metadata.create_all(engine)
     factory = sessionmaker(engine)
     with factory.begin() as db:
-        db.add(KnowledgeBase(id=1, name="IT", review_required=False))
-        db.add(KnowledgeBase(id=2, name="HR", review_required=True))
+        db.add(Tenant(id=1, name="默认租户", slug="default"))
+        db.add(KnowledgeBase(id=1, name="IT", tenant_id=1, review_required=False))
+        db.add(KnowledgeBase(id=2, name="HR", tenant_id=1, review_required=True))
         for doc_id, kb_id, filename, content in [
             (1, 1, "vpn.md", "连接 VPN"),
             (2, 2, "leave.md", "年假 5 天"),
@@ -68,10 +70,10 @@ def db_factory(tmp_path):
             )
         db.add_all(
             [
-                User(id=1, email="admin@corp", display_name="Admin", role="admin"),
-                User(id=2, email="editor@corp", display_name="Editor", role="editor"),
-                User(id=3, email="alice@corp", display_name="Alice", role="viewer"),
-                User(id=4, email="bob@corp", display_name="Bob", role="viewer"),
+                User(id=1, email="admin@corp", display_name="Admin", role="admin", tenant_id=None),
+                User(id=2, email="editor@corp", display_name="Editor", role="editor", tenant_id=1),
+                User(id=3, email="alice@corp", display_name="Alice", role="viewer", tenant_id=1),
+                User(id=4, email="bob@corp", display_name="Bob", role="viewer", tenant_id=1),
             ]
         )
         db.add_all(

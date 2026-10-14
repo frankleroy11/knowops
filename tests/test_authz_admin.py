@@ -22,6 +22,7 @@ from app.modules.knowledge.models import (
     KnowledgeBase,
     VectorIndex,
 )
+from app.modules.tenant.models import Tenant
 
 ENFORCED = Settings(auth_mode="enforced")
 TOKENS = {"alice": "alice-token", "bob": "bob-token", "admin": "admin-token", "editor": "editor-token"}
@@ -37,7 +38,8 @@ def db_factory(tmp_path):
     Base.metadata.create_all(engine)
     factory = sessionmaker(engine)
     with factory.begin() as db:
-        db.add_all([KnowledgeBase(id=1, name="IT"), KnowledgeBase(id=2, name="HR")])
+        db.add(Tenant(id=1, name="默认租户", slug="default"))
+        db.add_all([KnowledgeBase(id=1, name="IT", tenant_id=1), KnowledgeBase(id=2, name="HR", tenant_id=1)])
         for doc_id, kb_id, filename in [(1, 1, "vpn.md"), (2, 2, "leave.md")]:
             db.add(Document(id=doc_id, knowledge_base_id=kb_id, filename=filename))
             db.add(
@@ -61,10 +63,10 @@ def db_factory(tmp_path):
             )
         db.add_all(
             [
-                User(id=1, email="alice@corp", display_name="Alice", role="viewer"),
-                User(id=2, email="bob@corp", display_name="Bob", role="viewer"),
-                User(id=3, email="admin@corp", display_name="Admin", role="admin"),
-                User(id=4, email="editor@corp", display_name="Editor", role="editor"),
+                User(id=1, email="alice@corp", display_name="Alice", role="viewer", tenant_id=1),
+                User(id=2, email="bob@corp", display_name="Bob", role="viewer", tenant_id=1),
+                User(id=3, email="admin@corp", display_name="Admin", role="admin", tenant_id=1),
+                User(id=4, email="editor@corp", display_name="Editor", role="editor", tenant_id=1),
             ]
         )
         db.add_all(
@@ -117,6 +119,8 @@ def test_auth_me_requires_token_in_enforced_mode(client, enforced):
         "email": "alice@corp",
         "display_name": "Alice",
         "role": "viewer",
+        "tenant_id": 1,
+        "is_platform_admin": False,
         "local": False,
         "is_admin": False,
         "can_author": False,
@@ -194,7 +198,7 @@ def test_last_active_admin_is_protected(client, enforced, db_factory):
         with pytest.raises(HTTPException) as error:
             service.set_user_role(db, admin, "viewer")
         assert error.value.status_code == 409
-        service.create_user(db, "admin2@corp", "admin")
+        service.create_user(db, "admin2@corp", "admin", tenant_id=1)
         assert service.set_user_role(db, admin, "viewer").role == "viewer"
 
 

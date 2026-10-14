@@ -7,6 +7,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
 
+# `tenants` is referenced by a foreign key below; import it so the table is always
+# registered in the mapper metadata (Celery/ingest processes included).
+from app.modules.tenant import models as tenant_models  # noqa: F401
+
 ROLES = ("admin", "editor", "viewer")
 KB_ROLES = ("owner", "editor", "viewer")
 
@@ -17,6 +21,10 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True)
     display_name: Mapped[str] = mapped_column(String(128), default="")
     role: Mapped[str] = mapped_column(String(32), default="viewer")
+    # NULL means a platform-level account that may administer every tenant.
+    tenant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 

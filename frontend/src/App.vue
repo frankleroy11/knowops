@@ -283,7 +283,7 @@ onUnmounted(() => clearInterval(timer))
   <button v-if="canAuthor" class="new-kb" @click="showCreate=true">＋ 创建知识库</button>
   <div class="side-bottom">
     <span class="local-dot"></span>{{ me ? (me.local ? '本机开发空间' : me.email) : '正在确认身份…' }}<br>
-    <small v-if="me">{{ roleLabel }}{{ me.local ? ' · 未启用鉴权模式' : '' }}</small>
+    <small v-if="me">{{ roleLabel }}<template v-if="me.is_platform_admin"> · 平台管理员</template><template v-else-if="me.tenant_id"> · 租户 {{me.tenant_id}}</template>{{ me.local ? ' · 未启用鉴权模式' : '' }}</small>
     <button v-if="me && !me.local" class="text-button" @click="signOut">退出登录</button>
   </div>
 </aside>
@@ -426,7 +426,7 @@ onUnmounted(() => clearInterval(timer))
   <section role="dialog" aria-modal="true" aria-label="用户管理" class="modal wide">
     <div class="modal-heading"><h2>用户管理</h2><button type="button" class="icon" @click="showAdmin=false" aria-label="关闭">×</button></div>
     <p>管理员可创建用户、签发与吊销 Token、调整角色；Token 只在签发时显示一次。</p>
-    <div class="document-actions"><button type="button" class="api-link" @click="openAudit">查看审计日志</button></div>
+    <div class="document-actions"><button v-if="me?.is_platform_admin" type="button" class="api-link" @click="openAudit">查看审计日志</button></div>
     <form class="inline-form" @submit.prevent="createUser">
       <input v-model="adminForm.email" type="email" required placeholder="邮箱" aria-label="用户邮箱">
       <input v-model="adminForm.display_name" placeholder="显示名（可选）" aria-label="显示名">

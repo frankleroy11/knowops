@@ -17,6 +17,7 @@ from app.modules.auth.deps import CurrentPrincipal
 from app.modules.auth.principal import Principal
 from app.modules.knowledge import review
 from app.modules.knowledge.models import Chunk, Document, DocumentVersion, KnowledgeBase
+from app.modules.tenant import service as tenants
 from app.workers.celery_app import ingest_document
 
 router = APIRouter(tags=["知识库与文档"])
@@ -28,6 +29,7 @@ class KBCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     description: str = Field(default="", max_length=512)
     review_required: bool = False
+    tenant_id: int | None = None
 
 
 class KBUpdate(BaseModel):
@@ -58,16 +60,35 @@ class MemberOut(BaseModel):
     role: str
 
 
+def resolve_kb_tenant(db, principal, requested: int | None) -> int:
+    """Tenant members always create inside their own tenant; platform admins choose
+    explicitly or fall back to the default tenant."""
+    if principal.is_platform_admin:
+        tenant_id = requested
+        if tenant_id is None:
+            fallback = tenants.default_tenant(db)
+            if fallback is None:
+                raise HTTPException(422, "请先创建租户")
+            tenant_id = fallback.id
+        tenants.get_tenant(db, tenant_id)
+        return tenant_id
+    if principal.tenant_id is None:
+        raise HTTPException(403, "当前账号未绑定租户，无法创建知识库")
+    return principal.tenant_id
+
+
 @router.post("/knowledge-bases", response_model=KBOut, status_code=201)
 def create_kb(body: KBCreate, db: DB, principal: CurrentPrincipal):
     if not body.name.strip():
         raise HTTPException(422, "名称不能为空")
     service.require_author(principal)
+    tenant_id = resolve_kb_tenant(db, principal, body.tenant_id)
     kb = KnowledgeBase(
         name=body.name.strip(),
         description=body.description,
         owner_id=principal.id,
         review_required=body.review_required,
+        tenant_id=tenant_id,
     )
     db.add(kb)
     try:
@@ -83,13 +104,14 @@ def create_kb(body: KBCreate, db: DB, principal: CurrentPrincipal):
         "kb.create",
         "knowledge_base",
         kb.id,
-        f"name={kb.name} review_required={kb.review_required}",
+        f"name={kb.name} tenant={tenant_id} review_required={kb.review_required}",
     )
     return {
         "id": kb.id,
         "name": kb.name,
         "description": kb.description,
         "review_required": kb.review_required,
+        "tenant_id": kb.tenant_id,
         "my_role": "admin" if principal.is_admin else ("owner" if principal.id else None),
     }
 
@@ -115,6 +137,7 @@ def update_kb(kb_id: int, body: KBUpdate, db: DB, principal: CurrentPrincipal):
         "name": kb.name,
         "description": kb.description,
         "review_required": kb.review_required,
+        "tenant_id": kb.tenant_id,
         "my_role": service.kb_role(db, principal, kb.id),
     }
 
@@ -131,6 +154,7 @@ def list_kbs(db: DB, principal: CurrentPrincipal, limit: int = 50, offset: int =
             "name": kb.name,
             "description": kb.description,
             "review_required": kb.review_required,
+            "tenant_id": kb.tenant_id,
             "my_role": "admin" if principal.is_admin else roles.get(kb.id),
         }
         for kb in db.scalars(
@@ -415,12 +439,12 @@ def list_kb_members(kb_id: int, db: DB, principal: CurrentPrincipal):
 
 @router.post("/knowledge-bases/{kb_id}/members", response_model=MemberOut, status_code=201)
 def add_kb_member(kb_id: int, body: MemberIn, db: DB, principal: CurrentPrincipal):
-    service.require_kb(db, principal, kb_id, "write")
+    kb = service.require_kb(db, principal, kb_id, "write")
     user = service.find_user_by_email(db, body.email)
-    if user is None:
+    if user is None or user.tenant_id != kb.tenant_id:
+        # Cross-tenant users are hidden rather than disclosed.
         raise HTTPException(404, "用户不存在，请先创建用户")
     service.ensure_membership(db, kb_id, user.id, body.role)
-    kb = db.get(KnowledgeBase, kb_id)
     if body.role == "owner" and kb.owner_id is None:
         kb.owner_id = user.id
         db.commit()

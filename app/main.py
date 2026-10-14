@@ -38,6 +38,10 @@ from app.modules.audit.router import router as audit_router
 
 app.include_router(audit_router, prefix="/api/v1")
 
+from app.modules.tenant.router import router as tenant_router
+
+app.include_router(tenant_router, prefix="/api/v1")
+
 
 from fastapi.staticfiles import StaticFiles
 

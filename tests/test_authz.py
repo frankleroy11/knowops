@@ -24,6 +24,7 @@ from app.modules.knowledge.models import (
     KnowledgeBase,
     VectorIndex,
 )
+from app.modules.tenant.models import Tenant
 
 ENFORCED = Settings(auth_mode="enforced")
 TOKENS = {
@@ -44,7 +45,8 @@ def db_factory(tmp_path):
     Base.metadata.create_all(engine)
     factory = sessionmaker(engine)
     with factory.begin() as db:
-        db.add_all([KnowledgeBase(id=1, name="IT"), KnowledgeBase(id=2, name="HR")])
+        db.add(Tenant(id=1, name="默认租户", slug="default"))
+        db.add_all([KnowledgeBase(id=1, name="IT", tenant_id=1), KnowledgeBase(id=2, name="HR", tenant_id=1)])
         for doc_id, kb_id, filename, content in [
             (1, 1, "vpn.md", "连接 VPN"),
             (2, 2, "leave.md", "年假 5 天"),
@@ -71,10 +73,10 @@ def db_factory(tmp_path):
             )
         db.add_all(
             [
-                User(id=1, email="alice@corp", display_name="Alice", role="viewer"),
-                User(id=2, email="bob@corp", display_name="Bob", role="viewer"),
-                User(id=3, email="admin@corp", display_name="Admin", role="admin"),
-                User(id=4, email="editor@corp", display_name="Editor", role="editor"),
+                User(id=1, email="alice@corp", display_name="Alice", role="viewer", tenant_id=1),
+                User(id=2, email="bob@corp", display_name="Bob", role="viewer", tenant_id=1),
+                User(id=3, email="admin@corp", display_name="Admin", role="admin", tenant_id=1),
+                User(id=4, email="editor@corp", display_name="Editor", role="editor", tenant_id=1),
             ]
         )
         db.add_all(

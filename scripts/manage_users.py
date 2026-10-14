@@ -18,9 +18,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
+from app.modules.audit import service as audit
 from app.modules.auth import service
 from app.modules.auth.models import ApiToken, KbMember, User
 from app.modules.knowledge.models import KnowledgeBase
+from app.modules.tenant import service as tenants
+
+
+class CliActor:
+    """The CLI acts outside HTTP, but its changes must still be auditable."""
+
+    id = None
+    email = "cli@localhost"
+    tenant_id = None
+
+
+CLI_ACTOR = CliActor()
 
 
 def find_user(db, email: str) -> User | None:
@@ -48,7 +61,17 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--email", required=True)
     create.add_argument("--role", choices=["admin", "editor", "viewer"], default="viewer")
     create.add_argument("--display-name", default="")
+    create.add_argument("--tenant", default="", help="租户标识；默认使用 default 租户")
+    create.add_argument(
+        "--platform",
+        action="store_true",
+        help="平台级账号（tenant 为空，可跨租户管理）；谨慎使用",
+    )
     create.add_argument("--token", action="store_true", help="创建后立即签发一个 API token")
+
+    tenant = sub.add_parser("create-tenant", help="创建租户")
+    tenant.add_argument("--name", required=True)
+    tenant.add_argument("--slug", required=True)
 
     token = sub.add_parser("issue-token", help="为已有用户签发新的 API token")
     token.add_argument("--email", required=True)
@@ -71,20 +94,42 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run(db, args) -> None:
-    if args.command == "create-user":
-        user = service.create_user(db, args.email, args.role, args.display_name)
-        print(f"已创建用户 id={user.id} email={user.email} role={user.role}")
+    if args.command == "create-tenant":
+        tenant = tenants.create_tenant(db, args.name, args.slug)
+        audit.record(db, CLI_ACTOR, "tenant.create", "tenant", tenant.id, f"slug={tenant.slug}")
+        print(f"已创建租户 id={tenant.id} slug={tenant.slug} name={tenant.name}")
+    elif args.command == "create-user":
+        if args.platform:
+            tenant_id = None
+        elif args.tenant:
+            tenant_id = tenants.get_tenant_by_slug(db, args.tenant).id
+        else:
+            fallback = tenants.default_tenant(db)
+            tenant_id = fallback.id if fallback else None
+        if tenant_id is None and not args.platform:
+            raise SystemExit("没有可用租户，请先 create-tenant，或使用 --platform 创建平台账号")
+        user = service.create_user(db, args.email, args.role, args.display_name, tenant_id)
+        audit.record(
+            db, CLI_ACTOR, "user.create", "user", user.id, f"role={user.role} tenant={tenant_id}"
+        )
+        scope = "平台级" if tenant_id is None else f"租户 {tenant_id}"
+        print(f"已创建用户 id={user.id} email={user.email} role={user.role} {scope}")
         if args.token:
             print_token(service.issue_token(db, user, "cli"))
+            audit.record(db, CLI_ACTOR, "token.issue", "user", user.id, "label=cli")
     elif args.command == "issue-token":
         user = require_user(db, args.email)
         print_token(service.issue_token(db, user, args.label))
+        audit.record(db, CLI_ACTOR, "token.issue", "user", user.id, f"label={args.label}"[:512])
     elif args.command == "revoke-tokens":
         user = require_user(db, args.email)
-        print(f"已吊销 {service.revoke_tokens(db, user)} 个 token")
+        count = service.revoke_tokens(db, user)
+        audit.record(db, CLI_ACTOR, "token.revoke", "user", user.id, f"revoked={count}")
+        print(f"已吊销 {count} 个 token")
     elif args.command == "set-role":
         user = require_user(db, args.email)
         user = service.set_user_role(db, user, args.role)
+        audit.record(db, CLI_ACTOR, "user.update", "user", user.id, f"role={user.role}")
         print(f"用户 {user.email} 角色已改为 {user.role}")
     elif args.command == "grant-kb":
         user = require_user(db, args.email)
@@ -92,6 +137,14 @@ def run(db, args) -> None:
         if kb is None:
             raise SystemExit(f"知识库不存在：{args.kb_id}")
         member = service.ensure_membership(db, kb.id, user.id, args.role)
+        audit.record(
+            db,
+            CLI_ACTOR,
+            "kb.member.grant",
+            "knowledge_base",
+            kb.id,
+            f"user={user.email} role={member.role}",
+        )
         print(f"已授予 {user.email} 对知识库 {kb.id}({kb.name}) 的 {member.role} 权限")
     elif args.command == "list-users":
         for user in db.scalars(select(User).order_by(User.id)):
@@ -108,6 +161,7 @@ def run(db, args) -> None:
             )
             print(
                 f"id={user.id} {user.email} role={user.role} active={user.is_active} "
+                f"tenant={user.tenant_id if user.tenant_id is not None else 'platform'} "
                 f"tokens={live} kbs={','.join(memberships) or '-'}"
             )
 

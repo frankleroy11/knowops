@@ -30,6 +30,9 @@ class KnowledgeBase(Base):
     name: Mapped[str] = mapped_column(String(128), unique=True)
     description: Mapped[str] = mapped_column(String(512), default="")
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    tenant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
     # Optional per-KB workflow: when true, uploads wait for a reviewer before they
     # become retrievable. Default false keeps the historical "upload takes effect".
     review_required: Mapped[bool] = mapped_column(Boolean, default=False)
