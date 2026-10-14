@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     # 浏览器完成回调后跳回的前端地址
     oidc_web_redirect: str = "/ui/"
 
+    # --- 本地账号密码与 Token 生命周期 ---
+    # 新签发 Token 的有效天数；0 表示不过期
+    token_ttl_days: int = Field(default=30, ge=0, le=3650)
+    password_min_length: int = Field(default=8, ge=6, le=128)
+    # 连续失败次数达到上限后锁定一段时间
+    login_max_failures: int = Field(default=5, ge=1, le=100)
+    login_lockout_minutes: int = Field(default=15, ge=1, le=1440)
+
     # --- Embedding 适配器 ---
     # provider: bge_m3 = 真实本地模型；hash = 无模型依赖的确定性假向量，仅用于测试与离线开发
     embedder_provider: str = "bge_m3"

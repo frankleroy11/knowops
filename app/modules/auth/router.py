@@ -1,8 +1,8 @@
 """Current-identity endpoint and administrator user management."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from app.db.deps import DB
@@ -107,6 +107,90 @@ def me(principal: CurrentPrincipal):
     )
 
 
+class PasswordLogin(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=1, max_length=256)
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(default="", max_length=256)
+    new_password: str = Field(min_length=8, max_length=256)
+
+
+class PasswordReset(BaseModel):
+    password: str = Field(min_length=8, max_length=256)
+
+
+class SessionOut(BaseModel):
+    token: str
+    expires_at: str | None
+    user: dict
+
+
+def session_out(user: User, raw: str, expires_at) -> SessionOut:
+    return SessionOut(
+        token=raw,
+        expires_at=expires_at.isoformat() if expires_at else None,
+        user={
+            "id": user.id,
+            "email": user.email,
+            "display_name": user.display_name,
+            "role": user.role,
+            "tenant_id": user.tenant_id,
+        },
+    )
+
+
+def require_realm(feature: str) -> None:
+    if service.auth_mode() != service.ENFORCED:
+        raise HTTPException(404, f"{feature}仅在 AUTH_MODE=enforced 下可用")
+
+
+@router.post("/auth/password/login", response_model=SessionOut)
+def password_login(body: PasswordLogin, db: DB):
+    """Local account login: email + password in exchange for an API token."""
+    require_realm("账号密码登录")
+    user = service.authenticate_password(db, body.email, body.password)
+    raw = service.issue_token(db, user, "password")
+    audit.record(db, user, "auth.password.login", "user", user.id, f"email={user.email}")
+    return session_out(user, raw, service.token_expiry())
+
+
+@router.post("/auth/password")
+def change_password(body: PasswordChange, db: DB, principal: CurrentPrincipal):
+    if principal.id is None:
+        raise HTTPException(404, "本地免鉴权模式下没有本地账号")
+    user = db.get(User, principal.id)
+    if user is None:
+        raise HTTPException(404, "用户不存在")
+    service.change_password(db, user, body.current_password, body.new_password)
+    return {"ok": True}
+
+
+@router.post("/auth/logout")
+def logout(db: DB, authorization: Annotated[str | None, Header()] = None):
+    return {"revoked": service.revoke_presented_token(db, authorization)}
+
+
+@router.post("/auth/token/rotate", response_model=SessionOut)
+def rotate_token(
+    db: DB,
+    principal: CurrentPrincipal,
+    authorization: Annotated[str | None, Header()] = None,
+    label: str = "rotated",
+):
+    """Revoke the presented token and hand back a fresh one."""
+    if principal.id is None:
+        raise HTTPException(404, "本地免鉴权模式下没有可轮换的 Token")
+    user = db.get(User, principal.id)
+    if user is None:
+        raise HTTPException(404, "用户不存在")
+    service.revoke_presented_token(db, authorization)
+    raw = service.issue_token(db, user, label)
+    audit.record(db, user, "token.rotate", "user", user.id, f"email={user.email}")
+    return session_out(user, raw, service.token_expiry())
+
+
 @router.get("/admin/users", response_model=list[UserOut])
 def list_users(db: DB, principal: AdminPrincipal):
     users = service.list_users(db)
@@ -175,3 +259,13 @@ def revoke_tokens(user_id: int, db: DB, principal: AdminPrincipal):
     revoked = service.revoke_tokens(db, user)
     audit.record(db, principal, "token.revoke", "user", user.id, f"revoked={revoked}")
     return {"user_id": user.id, "revoked": revoked}
+
+
+@router.post("/admin/users/{user_id}/password")
+def reset_password(user_id: int, body: PasswordReset, db: DB, principal: AdminPrincipal):
+    """Administrator sets a new local password (the old one is not required)."""
+    user = get_user(db, user_id)
+    if not principal.is_platform_admin and user.tenant_id != principal.tenant_id:
+        raise HTTPException(404, "用户不存在")
+    service.set_password(db, user, body.password, actor=principal)
+    return {"user_id": user.id, "ok": True}

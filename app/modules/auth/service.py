@@ -5,16 +5,24 @@ local administrator. Any other value enforces bearer tokens, so an unauthenticat
 request fails closed with 401 instead of silently falling back.
 """
 
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta
+from functools import lru_cache
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.modules.audit import service as audit
 from app.modules.auth.models import KB_ROLES, ROLES, ApiToken, KbMember, User
 from app.modules.auth.principal import ADMIN, LOCAL_ADMIN, Principal
-from app.modules.auth.security import generate_token, hash_token
+from app.modules.auth.security import (
+    generate_token,
+    hash_password,
+    hash_token,
+    verify_password,
+)
 from app.modules.knowledge.models import KnowledgeBase
 
 WRITE_KB_ROLES = ("owner", "editor")
@@ -50,6 +58,8 @@ def resolve_principal(db: Session | None, authorization: str | None) -> Principa
     record = db.scalar(select(ApiToken).where(ApiToken.token_hash == hash_token(token)))
     if record is None or record.revoked_at is not None:
         raise HTTPException(401, "凭据无效")
+    if record.expires_at is not None and record.expires_at <= datetime.now():
+        raise HTTPException(401, "凭据已过期，请重新登录")
     user = db.get(User, record.user_id)
     if user is None or not user.is_active:
         raise HTTPException(401, "凭据无效")
@@ -113,11 +123,37 @@ def admin_count(db: Session) -> int:
     )
 
 
-def issue_token(db: Session, user: User, label: str = "") -> str:
+def token_expiry(ttl_days: int | None = None) -> datetime | None:
+    """Tokens expire on the API clock, the same clock that verifies them."""
+    days = get_settings().token_ttl_days if ttl_days is None else ttl_days
+    return datetime.now() + timedelta(days=days) if days else None
+
+
+def issue_token(db: Session, user: User, label: str = "", ttl_days: int | None = None) -> str:
     raw = generate_token()
-    db.add(ApiToken(user_id=user.id, token_hash=hash_token(raw), label=label.strip()))
+    db.add(
+        ApiToken(
+            user_id=user.id,
+            token_hash=hash_token(raw),
+            label=label.strip(),
+            expires_at=token_expiry(ttl_days),
+        )
+    )
     db.commit()
     return raw
+
+
+def revoke_presented_token(db: Session, authorization: str | None) -> int:
+    """Logout/rotation: revoke exactly the token that made the request."""
+    raw = _bearer_token(authorization)
+    if raw is None:
+        return 0
+    record = db.scalar(select(ApiToken).where(ApiToken.token_hash == hash_token(raw)))
+    if record is None or record.revoked_at is not None:
+        return 0
+    record.revoked_at = datetime.now()
+    db.commit()
+    return 1
 
 
 def revoke_tokens(db: Session, user: User) -> int:
@@ -231,6 +267,69 @@ def require_author(principal: Principal) -> None:
 def require_admin(principal: Principal) -> None:
     if principal.role != ADMIN:
         raise HTTPException(403, "需要管理员权限")
+
+
+def validate_password(password: str) -> str:
+    minimum = get_settings().password_min_length
+    if len(password or "") < minimum:
+        raise HTTPException(422, f"密码至少 {minimum} 位")
+    return password
+
+
+def set_password(db: Session, user: User, password: str, actor=None) -> User:
+    validate_password(password)
+    user.password_hash = hash_password(password)
+    user.failed_logins = 0
+    user.locked_until = None
+    db.commit()
+    audit.record(
+        db,
+        actor if actor is not None else user,
+        "user.password.set",
+        "user",
+        user.id,
+        f"email={user.email}",
+    )
+    return user
+
+
+def change_password(db: Session, user: User, current_password: str, new_password: str) -> User:
+    if user.password_hash and not verify_password(current_password, user.password_hash):
+        raise HTTPException(401, "当前密码不正确")
+    return set_password(db, user, new_password, actor=user)
+
+
+@lru_cache(maxsize=1)
+def _dummy_password_hash() -> str:
+    """Keeps unknown-account logins as expensive as real ones."""
+    return hash_password(secrets.token_urlsafe(24))
+
+
+def authenticate_password(db: Session, email: str, password: str) -> User:
+    settings = get_settings()
+    user = db.scalar(select(User).where(User.email == (email or "").strip().lower()))
+    generic = HTTPException(401, "邮箱或密码不正确")
+    if user is None:
+        verify_password(password, _dummy_password_hash())
+        raise generic
+    if not user.is_active:
+        verify_password(password, _dummy_password_hash())
+        raise generic
+    now = datetime.now()
+    if user.locked_until is not None and user.locked_until > now:
+        minutes = int((user.locked_until - now).total_seconds() // 60) + 1
+        raise HTTPException(429, f"登录失败次数过多，请约 {minutes} 分钟后再试")
+    if not verify_password(password, user.password_hash):
+        user.failed_logins = (user.failed_logins or 0) + 1
+        if user.failed_logins >= settings.login_max_failures:
+            user.locked_until = now + timedelta(minutes=settings.login_lockout_minutes)
+            user.failed_logins = 0
+        db.commit()
+        raise generic
+    user.failed_logins = 0
+    user.locked_until = None
+    db.commit()
+    return user
 
 
 def set_user_role(db: Session, user: User, role: str) -> User:

@@ -67,6 +67,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="平台级账号（tenant 为空，可跨租户管理）；谨慎使用",
     )
+    create.add_argument("--password", default="", help="同时设置本地登录密码")
+    create.add_argument(
+        "--token-days",
+        type=int,
+        default=None,
+        help="token 有效天数；缺省用 TOKEN_TTL_DAYS，0 表示不过期",
+    )
     create.add_argument("--token", action="store_true", help="创建后立即签发一个 API token")
 
     tenant = sub.add_parser("create-tenant", help="创建租户")
@@ -76,6 +83,11 @@ def build_parser() -> argparse.ArgumentParser:
     token = sub.add_parser("issue-token", help="为已有用户签发新的 API token")
     token.add_argument("--email", required=True)
     token.add_argument("--label", default="")
+    token.add_argument("--days", type=int, default=None, help="有效天数；0 表示不过期")
+
+    password = sub.add_parser("set-password", help="设置或重置本地登录密码")
+    password.add_argument("--email", required=True)
+    password.add_argument("--password", required=True)
 
     revoke = sub.add_parser("revoke-tokens", help="吊销某用户的全部 token")
     revoke.add_argument("--email", required=True)
@@ -114,13 +126,20 @@ def run(db, args) -> None:
         )
         scope = "平台级" if tenant_id is None else f"租户 {tenant_id}"
         print(f"已创建用户 id={user.id} email={user.email} role={user.role} {scope}")
+        if args.password:
+            service.set_password(db, user, args.password, actor=CLI_ACTOR)
+            print("已设置本地登录密码")
         if args.token:
-            print_token(service.issue_token(db, user, "cli"))
+            print_token(service.issue_token(db, user, "cli", args.token_days))
             audit.record(db, CLI_ACTOR, "token.issue", "user", user.id, "label=cli")
     elif args.command == "issue-token":
         user = require_user(db, args.email)
-        print_token(service.issue_token(db, user, args.label))
+        print_token(service.issue_token(db, user, args.label, args.days))
         audit.record(db, CLI_ACTOR, "token.issue", "user", user.id, f"label={args.label}"[:512])
+    elif args.command == "set-password":
+        user = require_user(db, args.email)
+        service.set_password(db, user, args.password, actor=CLI_ACTOR)
+        print(f"已为 {user.email} 设置本地登录密码")
     elif args.command == "revoke-tokens":
         user = require_user(db, args.email)
         count = service.revoke_tokens(db, user)

@@ -11,6 +11,7 @@ const page = ref(0), loading = ref(false), action = ref(null)
 
 const token = ref(localStorage.getItem(TOKEN_KEY) || '')
 const me = ref(null), needsLogin = ref(false), loginToken = ref(''), loginError = ref(''), busyLogin = ref(false), ssoEnabled = ref(false)
+const loginEmail = ref(''), loginPassword = ref(''), busyPassword = ref(false)
 
 const showAdmin = ref(false), users = ref([]), adminForm = ref({email: '', display_name: '', role: 'viewer'})
 const issuedToken = ref(''), adminBusy = ref(false)
@@ -133,6 +134,23 @@ async function signIn() {
     me.value = profile; needsLogin.value = false; loginToken.value = ''; loginError.value = ''
     await loadKB(); await loadDocs()
   } catch (e) { loginError.value = e.message } finally { busyLogin.value = false }
+}
+async function passwordLogin() {
+  busyPassword.value = true; loginError.value = ''
+  try {
+    const response = await fetch('/api/v1/auth/password/login', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email: loginEmail.value.trim(), password: loginPassword.value})
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : '登录失败')
+    token.value = data.token
+    localStorage.setItem(TOKEN_KEY, data.token)
+    loginEmail.value = ''; loginPassword.value = ''
+    needsLogin.value = false
+    me.value = await api('/auth/me')
+    await loadKB(); await loadDocs()
+  } catch (e) { loginError.value = e.message } finally { busyPassword.value = false }
 }
 function signOut() {
   token.value = ''; localStorage.removeItem(TOKEN_KEY); me.value = null
@@ -525,13 +543,18 @@ onUnmounted(() => clearInterval(timer))
 </div>
 
 <div v-if="needsLogin" class="overlay">
-  <form role="dialog" aria-modal="true" aria-label="登录" class="modal" @submit.prevent="signIn">
+  <form role="dialog" aria-modal="true" aria-label="登录" class="modal" @submit.prevent="passwordLogin">
     <div class="modal-heading"><h2>登录 KnowOps</h2></div>
-    <p>粘贴管理员签发的 API Token，或使用企业账号单点登录。Token 可在「用户管理」中签发，或在服务器上用 <code>scripts/manage_users.py</code> 生成。</p>
+    <p>用邮箱账号密码登录，或改用 API Token / 企业 SSO。Token 可在「用户管理」中签发，或用 <code>scripts/manage_users.py</code> 设置密码。</p>
     <button v-if="ssoEnabled" type="button" class="api-link sso-button" @click="ssoLogin">使用企业 SSO 登录 →</button>
-    <label>API Token<input v-model="loginToken" type="password" autocomplete="off" placeholder="knp_…" aria-label="API Token"></label>
+    <label>邮箱<input v-model="loginEmail" type="email" autocomplete="username" placeholder="you@corp.com" aria-label="邮箱"></label>
+    <label>密码<input v-model="loginPassword" type="password" autocomplete="current-password" aria-label="密码"></label>
     <div v-if="loginError" class="alert error">{{loginError}}</div>
-    <button class="primary" :disabled="busyLogin">{{busyLogin?'验证中…':'登录'}}</button>
+    <button class="primary" :disabled="busyPassword||!loginEmail.trim()||!loginPassword">{{busyPassword?'验证中…':'登录'}}</button>
+    <details class="token-login"><summary>改用 API Token 登录</summary>
+      <label>API Token<input v-model="loginToken" type="password" autocomplete="off" placeholder="knp_…" aria-label="API Token"></label>
+      <button type="button" class="api-link" :disabled="busyLogin" @click="signIn">{{busyLogin?'验证中…':'用 Token 登录'}}</button>
+    </details>
   </form>
 </div>
 </div></template>
