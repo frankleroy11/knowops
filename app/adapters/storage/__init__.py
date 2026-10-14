@@ -1,1 +1,21 @@
-"""上传文件存储适配；当前落盘逻辑内联在 knowledge 模块，迁移计划见 docs/ 说明。"""
+"""上传文件存储适配器：本地磁盘实现见 local。"""
+
+from app.adapters.storage.local import (
+    ALLOWED_SUFFIXES,
+    EmptyFile,
+    FileTooLarge,
+    LocalStorage,
+    StorageError,
+    StoredFile,
+    UnsupportedFormat,
+)
+
+__all__ = [
+    "ALLOWED_SUFFIXES",
+    "EmptyFile",
+    "FileTooLarge",
+    "LocalStorage",
+    "StorageError",
+    "StoredFile",
+    "UnsupportedFormat",
+]

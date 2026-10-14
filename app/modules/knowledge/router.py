@@ -1,7 +1,4 @@
-import hashlib
-from pathlib import Path
 from typing import Literal
-from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
@@ -9,6 +6,13 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.adapters.storage import (
+    FileTooLarge,
+    LocalStorage,
+    StorageError,
+    StoredFile,
+    UnsupportedFormat,
+)
 from app.core.config import ROOT
 from app.db.deps import DB, get_db  # noqa: F401 - re-exported for existing imports
 from app.modules.audit import service as audit
@@ -175,50 +179,35 @@ def dispatch(version):
         return {"queued": False, "task_id": None}
 
 
-def store_upload(file: UploadFile) -> tuple[str, str, str]:
-    """Persist one uploaded file; returns (filename, stored_name, sha256)."""
-    name = (file.filename or "").replace("\\", "/").split("/")[-1]
-    suffix = Path(name).suffix.lower()
-    if suffix not in {".txt", ".md", ".pdf"}:
-        raise HTTPException(415, "仅支持 TXT、Markdown、文本 PDF")
-    if len(name) > 255:
-        raise HTTPException(422, "文件名过长")
-    directory = ROOT / "storage"
-    directory.mkdir(exist_ok=True)
-    target = directory / (uuid4().hex + suffix)
-    digest = hashlib.sha256()
-    total = 0
-    committed = False
+def storage_backend() -> LocalStorage:
+    """Storage rooted at the project directory (tests patch `knowledge.ROOT`)."""
+    return LocalStorage(ROOT, MAX_BYTES)
+
+
+def store_upload(file: UploadFile) -> StoredFile:
+    """Persist one upload; the HTTP layer only maps storage errors to status codes."""
     try:
-        with target.open("xb") as output:
-            while data := file.file.read(64 * 1024):
-                total += len(data)
-                if total > MAX_BYTES:
-                    raise HTTPException(413, "文件不能超过 10 MiB")
-                digest.update(data)
-                output.write(data)
-        if total == 0:
-            raise HTTPException(422, "文件为空")
-        committed = True
-    finally:
-        file.file.close()
-        if not committed:
-            target.unlink(missing_ok=True)
-    return name, target.name, digest.hexdigest()
+        return storage_backend().save(file)
+    except UnsupportedFormat as exc:
+        raise HTTPException(415, str(exc)) from None
+    except FileTooLarge as exc:
+        raise HTTPException(413, str(exc)) from None
+    except StorageError as exc:
+        raise HTTPException(422, str(exc)) from None
 
 
 @router.post("/knowledge-bases/{kb_id}/documents", status_code=202)
 def upload(kb_id: int, file: UploadFile, db: DB, principal: CurrentPrincipal):
     kb = service.require_kb(db, principal, kb_id, "write")
-    name, storage_name, content_hash = store_upload(file)
-    doc = Document(knowledge_base_id=kb_id, filename=name, uploaded_by=principal.id)
+    stored = store_upload(file)
+    doc = Document(knowledge_base_id=kb_id, filename=stored.filename, uploaded_by=principal.id)
     db.add(doc)
     db.flush()
     version = DocumentVersion(
         document_id=doc.id,
         version=1,
-        content_hash=content_hash,
-        storage_path=storage_name,
+        content_hash=stored.content_hash,
+        storage_path=stored.storage_name,
         uploaded_by=principal.id,
     )
     db.add(version)
@@ -230,7 +219,7 @@ def upload(kb_id: int, file: UploadFile, db: DB, principal: CurrentPrincipal):
         "document.upload",
         "document",
         doc.id,
-        f"kb={kb_id} filename={name} review={status}",
+        f"kb={kb_id} filename={stored.filename} review={status}",
     )
     queue = dispatch(version)
     return {
@@ -250,7 +239,7 @@ def upload_version(document_id: int, file: UploadFile, db: DB, principal: Curren
     if doc is None:
         raise HTTPException(404, "文档不存在")
     kb = service.require_kb(db, principal, doc.knowledge_base_id, "write")
-    name, storage_name, content_hash = store_upload(file)
+    stored = store_upload(file)
     latest = (
         db.scalar(select(func.max(DocumentVersion.version)).where(DocumentVersion.document_id == doc.id))
         or 0
@@ -258,8 +247,8 @@ def upload_version(document_id: int, file: UploadFile, db: DB, principal: Curren
     version = DocumentVersion(
         document_id=doc.id,
         version=latest + 1,
-        content_hash=content_hash,
-        storage_path=storage_name,
+        content_hash=stored.content_hash,
+        storage_path=stored.storage_name,
         uploaded_by=principal.id,
     )
     db.add(version)
@@ -271,7 +260,7 @@ def upload_version(document_id: int, file: UploadFile, db: DB, principal: Curren
         "document.version.upload",
         "document",
         doc.id,
-        f"version={version.version} filename={name} review={status}",
+        f"version={version.version} filename={stored.filename} review={status}",
     )
     queue = dispatch(version)
     return {
