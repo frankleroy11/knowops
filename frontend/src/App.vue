@@ -1,6 +1,11 @@
 <script setup>
 import {ref, computed, onMounted, onUnmounted, watch} from 'vue'
-import {createConversationStore, scopeKey, switchScope} from './conversations.js'
+import {
+  createConversationPersistence,
+  createConversationStore,
+  scopeKey,
+  switchScope
+} from './conversations.js'
 
 const TOKEN_KEY = 'knowops.token'
 const METHOD_KEY = 'knowops.login_method'
@@ -32,9 +37,41 @@ const kbRole = computed(() => kb.value?.my_role || null)
 const canWriteKb = computed(() => isAdmin.value || ['owner', 'editor'].includes(kbRole.value))
 const canUpload = computed(() => canAuthor.value && canWriteKb.value)
 const roleLabel = computed(() => ({admin: '管理员', editor: '知识管理员', viewer: '只读成员'}[me.value?.role] || me.value?.role || ''))
+const browserStorage = (() => { try { return window.sessionStorage } catch (e) { return null } })()
+const persistence = createConversationPersistence(browserStorage)
 const conversations = createConversationStore()
+conversations.load(persistence.load())
 let activeScope = scopeKey(selected.value)
-let timer, generation = 0
+let timer, generation = 0, persistTimer = 0, clearingTimer = 0
+const clearing = ref(false)
+
+/** 把当前范围的记录写进桶并落盘（300ms 防抖，避免每敲一个字都写存储）。 */
+function persistConversations(immediate = false) {
+  const run = () => {
+    conversations.stash(activeScope, {messages: messages.value, question: question.value})
+    persistence.save(conversations.entries())
+  }
+  if (immediate) { clearTimeout(persistTimer); run(); return }
+  clearTimeout(persistTimer)
+  persistTimer = setTimeout(run, 300)
+}
+
+/** 清空“当前检索范围”的会话，需要点两次确认。 */
+function clearConversation() {
+  if (!clearing.value) {
+    clearing.value = true
+    clearTimeout(clearingTimer)
+    clearingTimer = setTimeout(() => { clearing.value = false }, 3000)
+    return
+  }
+  clearTimeout(clearingTimer)
+  clearing.value = false
+  messages.value = []
+  question.value = ''
+  conversations.stash(activeScope, {messages: [], question: ''})
+  persistence.save(conversations.entries())
+  notice.value = '已清空当前会话记录。'
+}
 
 async function api(path, options = {}) {
   const controller = new AbortController()
@@ -45,7 +82,7 @@ async function api(path, options = {}) {
     const r = await fetch('/api/v1' + path, {...options, headers, signal: controller.signal})
     const data = r.status === 204 ? null : await r.json()
     if (r.status === 401) {
-      conversations.clear(); messages.value = []
+      conversations.clear(); persistence.clear(); messages.value = []
       needsLogin.value = true
       throw new Error('登录已失效，请重新登录')
     }
@@ -89,6 +126,7 @@ watch(selected, () => {
   messages.value = conversation.messages
   question.value = conversation.question
   activeScope = next
+  persistConversations(true)
   loadDocs().catch(fail)
 })
 async function create() {
@@ -133,7 +171,7 @@ async function ask() {
     if (g === generation) messages.value.push({role: 'assistant', text: result.answer, citations: result.citations, claims: result.claims, answerable: result.answerable, grounding_status: result.grounding_status})
   } catch (e) {
     if (g === generation) { question.value = text; fail(e) }
-  } finally { asking.value = false }
+  } finally { asking.value = false; persistConversations() }
 }
 /** 线上反馈：把用户评价连同 grounding_status 一起回传，补齐评测闭环的线上部分。 */
 async function sendFeedback(m, index, rating) {
@@ -151,6 +189,7 @@ async function sendFeedback(m, index, rating) {
     else { payload.scope = 'knowledge_base'; payload.knowledge_base_id = selected.value }
     await api('/feedback', json(payload))
     m.feedback = rating
+    persistConversations()
   } catch (e) { fail(e) }
 }
 async function changePage(delta) { page.value += delta; await loadDocs().catch(fail) }
@@ -196,7 +235,7 @@ async function signOut() {
     try { await api('/auth/logout', {method: 'POST'}) } catch (e) { /* 本地清理优先 */ }
   }
   token.value = ''
-  conversations.clear()
+  conversations.clear(); persistence.clear()
   localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(METHOD_KEY); loginMethod.value = ''
   me.value = null; kbs.value = []; docs.value = []; messages.value = []; users.value = []; members.value = []
   showAdmin.value = false; showMembers.value = false; selected.value = 'all'; needsLogin.value = true
@@ -215,6 +254,8 @@ function ssoLogin() {
 }
 async function bootstrap() {
   loading.value = true
+  const saved = conversations.restore(activeScope)
+  if (saved) { messages.value = saved.messages; question.value = saved.question }
   await loadSsoStatus()
   try {
     me.value = await api('/auth/me')
@@ -361,6 +402,9 @@ async function openAudit() {
   try { auditLogs.value = await api(`/admin/audit-logs?limit=50${query}`) } catch (e) { fail(e) } finally { adminBusy.value = false }
 }
 
+watch(messages, () => persistConversations(), {deep: true})
+watch(question, () => persistConversations())
+
 onMounted(async () => {
   await bootstrap()
   timer = setInterval(() => {
@@ -406,6 +450,9 @@ onUnmounted(() => clearInterval(timer))
       <button :class="{chosen:tab==='chat'}" @click="tab='chat'">知识问答</button>
       <button v-if="!unified" :class="{chosen:tab==='docs'}" @click="tab='docs'">文档管理 <span>{{docs.length}}</span></button>
     </nav>
+    <button v-if="tab==='chat' && messages.length" type="button" class="text-button" @click="clearConversation">
+      {{ clearing ? '再点一次确认清空' : '清空当前会话' }}
+    </button>
     <span v-if="unified" class="caption">检索范围：全部 {{kbs.length}} 个知识库</span>
     <span v-else class="caption">当前页 {{indexed}} 份文档可检索{{ kbRole ? ' · 我的权限：'+({admin:'管理员',owner:'所有者',editor:'可编辑',viewer:'只读'}[kbRole]||kbRole) : '' }}</span>
   </div>

@@ -2,7 +2,17 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-import { createConversationStore, scopeKey, switchScope } from '../src/conversations.js'
+import {
+  MAX_MESSAGES_PER_SCOPE,
+  STORAGE_KEY,
+  createConversationPersistence,
+  createConversationStore,
+  parseConversations,
+  scopeKey,
+  snapshotConversations,
+  switchScope,
+  trimMessage,
+} from '../src/conversations.js'
 
 const answer = (text) => ({ role: 'assistant', text })
 
@@ -103,4 +113,104 @@ test('App.vue routes the scope switch through switchScope instead of clearing me
   assert.match(watcher, /switchScope\(conversations/)
   assert.match(watcher, /messages\.value = conversation\.messages/)
   assert.doesNotMatch(watcher, /messages\.value = \[\]/)
+})
+
+// ---- 持久化（刷新页面后仍在）----
+
+class FakeStorage {
+  constructor(limit = Infinity) {
+    this.limit = limit
+    this.data = new Map()
+  }
+  getItem(key) {
+    return this.data.has(key) ? this.data.get(key) : null
+  }
+  setItem(key, value) {
+    if (value.length > this.limit) throw new Error('QuotaExceededError')
+    this.data.set(key, value)
+  }
+  removeItem(key) {
+    this.data.delete(key)
+  }
+}
+
+test('a saved conversation survives a reload', () => {
+  const storage = new FakeStorage()
+  const persistence = createConversationPersistence(storage)
+  const store = createConversationStore()
+  store.stash('all', { messages: [{ role: 'user', text: 'q' }, answer('a')], question: '草稿' })
+  assert.equal(persistence.save(store.entries()), true)
+
+  // 新页面：全新 store + 从 storage 恢复
+  const reloaded = createConversationStore()
+  reloaded.load(persistence.load())
+  const restored = reloaded.restore('all')
+  assert.deepEqual(restored.messages.map((m) => m.text), ['q', 'a'])
+  assert.equal(restored.question, '草稿')
+})
+
+test('long citation text is truncated before saving', () => {
+  const long = 'x'.repeat(2000)
+  const trimmed = trimMessage({ role: 'assistant', citations: [{ content: long }, { content: 'short' }] })
+  assert.equal(trimmed.citations[0].content.length, 600)
+  assert.equal(trimmed.citations[1].content, 'short')
+  assert.equal(trimMessage({ role: 'user', text: 'no citations' }).text, 'no citations')
+})
+
+test('only the most recent messages per scope are kept', () => {
+  const messages = Array.from({ length: MAX_MESSAGES_PER_SCOPE + 5 }, (_, i) => answer(`m${i}`))
+  const snapshot = snapshotConversations([['all', { messages, question: '' }]])
+  const kept = snapshot[0][1].messages
+  assert.equal(kept.length, MAX_MESSAGES_PER_SCOPE)
+  assert.equal(kept[0].text, 'm5')
+})
+
+test('when the quota is exceeded the oldest scopes are dropped first', () => {
+  const store = createConversationStore()
+  const big = 'y'.repeat(500)
+  for (const key of ['all', '1', '2']) {
+    store.stash(key, { messages: [answer(big)], question: '' })
+  }
+  // 配额只够装下最近的一份（用真实序列化长度算阈值，避免拍脑袋）
+  const oneEntry = JSON.stringify(snapshotConversations([['2', { messages: [answer(big)], question: '' }]]))
+  const persistence = createConversationPersistence(new FakeStorage(oneEntry.length + 10))
+  assert.equal(persistence.save(store.entries()), true)
+  const restored = createConversationStore()
+  restored.load(persistence.load())
+  assert.equal(restored.has('all'), false)
+  assert.equal(restored.has('1'), false)
+  assert.equal(restored.has('2'), true)
+})
+
+test('a storage that always fails degrades gracefully', () => {
+  const broken = {
+    getItem() { throw new Error('blocked') },
+    setItem() { throw new Error('blocked') },
+    removeItem() { throw new Error('blocked') },
+  }
+  const store = createConversationStore()
+  store.stash('all', { messages: [answer('a')], question: '' })
+  const persistence = createConversationPersistence(broken)
+  assert.deepEqual(persistence.load(), [])
+  assert.equal(persistence.save(store.entries()), false)
+  persistence.clear()
+})
+
+test('garbage in storage never breaks the page', () => {
+  assert.deepEqual(parseConversations(null), [])
+  assert.deepEqual(parseConversations(''), [])
+  assert.deepEqual(parseConversations('not json'), [])
+  assert.deepEqual(parseConversations('{"a":1}'), [])
+  assert.deepEqual(parseConversations('[["all"]]'), [])
+  assert.deepEqual(parseConversations('[[1,{}]]'), [])
+  const partial = parseConversations('[["all",{"messages":"nope"}]]')
+  assert.deepEqual(partial, [['all', { messages: [], question: '' }]])
+})
+
+test('no storage means no persistence but the app still works', () => {
+  const persistence = createConversationPersistence(null)
+  assert.deepEqual(persistence.load(), [])
+  assert.equal(persistence.save([['all', { messages: [], question: '' }]]), false)
+  persistence.clear()
+  assert.equal(STORAGE_KEY, 'knowops.conversations')
 })
