@@ -76,7 +76,7 @@ SSO 登录时把 ID Token 存到本地 Token 行（`api_tokens.id_token`，仅�
 
 ## 9. 验证
 
-- `ruff check .` 通过；`pytest` **214 项通过**（新增 17 项：账号安全 16 + SSO 登出提示 1）；
+- `ruff check .` 通过；`pytest` **215 项通过**（新增 18 项：账号安全 16 + SSO 登出提示 2）；
   前端 `node --test` 16 项通过、构建通过。
 - 迁移 `0011` 已应用到真实 MySQL（`password_history`/`password_resets`/`login_attempts`
   与 `users.totp_*`、`api_tokens.id_token` 均确认存在）。
