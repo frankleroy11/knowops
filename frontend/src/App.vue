@@ -1,5 +1,6 @@
 <script setup>
 import {ref, computed, onMounted, onUnmounted, watch} from 'vue'
+import {createConversationStore, scopeKey, switchScope} from './conversations.js'
 
 const TOKEN_KEY = 'knowops.token'
 const METHOD_KEY = 'knowops.login_method'
@@ -31,6 +32,8 @@ const kbRole = computed(() => kb.value?.my_role || null)
 const canWriteKb = computed(() => isAdmin.value || ['owner', 'editor'].includes(kbRole.value))
 const canUpload = computed(() => canAuthor.value && canWriteKb.value)
 const roleLabel = computed(() => ({admin: '管理员', editor: '知识管理员', viewer: '只读成员'}[me.value?.role] || me.value?.role || ''))
+const conversations = createConversationStore()
+let activeScope = scopeKey(selected.value)
 let timer, generation = 0
 
 async function api(path, options = {}) {
@@ -42,6 +45,7 @@ async function api(path, options = {}) {
     const r = await fetch('/api/v1' + path, {...options, headers, signal: controller.signal})
     const data = r.status === 204 ? null : await r.json()
     if (r.status === 401) {
+      conversations.clear(); messages.value = []
       needsLogin.value = true
       throw new Error('登录已失效，请重新登录')
     }
@@ -75,8 +79,16 @@ async function loadDocs() {
 }
 watch(selected, () => {
   if (unified.value) tab.value = 'chat'
-  generation++; page.value = 0; docs.value = []; messages.value = []; error.value = ''; notice.value = ''
+  generation++; page.value = 0; docs.value = []; error.value = ''; notice.value = ''
   if (showMembers.value) { members.value = []; showMembers.value = false }
+  // 每个检索范围各自保留问答记录：切走时存起来，切回时取回。
+  const next = scopeKey(selected.value)
+  const conversation = switchScope(conversations, {
+    from: activeScope, to: next, messages: messages.value, question: question.value
+  })
+  messages.value = conversation.messages
+  question.value = conversation.question
+  activeScope = next
   loadDocs().catch(fail)
 })
 async function create() {
@@ -184,6 +196,7 @@ async function signOut() {
     try { await api('/auth/logout', {method: 'POST'}) } catch (e) { /* 本地清理优先 */ }
   }
   token.value = ''
+  conversations.clear()
   localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(METHOD_KEY); loginMethod.value = ''
   me.value = null; kbs.value = []; docs.value = []; messages.value = []; users.value = []; members.value = []
   showAdmin.value = false; showMembers.value = false; selected.value = 'all'; needsLogin.value = true
@@ -415,7 +428,7 @@ onUnmounted(() => clearInterval(timer))
           <button @click="question='在家办公如何连接公司内网？'">在家如何连接公司内网？ ↗</button>
           <button v-if="canAuthor" @click="unified?showCreate=true:tab='docs'">{{unified?'创建知识库 ↗':'先上传一份文档 ↗'}}</button>
         </div>
-        <small>每次提问独立检索，暂不使用对话历史。</small>
+        <small>每次提问独立检索；切换知识库会分别保留各自的问答记录。</small>
       </div>
       <article v-for="(m,i) in messages" :key="i" class="message" :class="m.role">
         <div class="avatar">{{m.role==='user'?'你':'K'}}</div>
