@@ -35,6 +35,23 @@ def start(db: DB, web: bool = True):
     )
 
 
+@router.get("/auth/oidc/logout")
+def logout(web: bool = True):
+    """RP-initiated single logout: send the browser to the provider's end-session URL.
+
+    The local API token is revoked separately by `POST /auth/logout`, which the SPA
+    calls first; this endpoint only ends the provider-side session.
+    """
+    service.require_enabled()
+    metadata = OidcClient().discovery()
+    target = service.logout_url(metadata)
+    if target is None:
+        raise HTTPException(404, "OIDC 提供方未声明 end_session_endpoint")
+    if web:
+        return RedirectResponse(target, status_code=302)
+    return {"logout_url": target}
+
+
 @router.get("/auth/oidc/callback")
 def callback(db: DB, code: str = "", state: str = "", error: str = ""):
     service.require_enabled()

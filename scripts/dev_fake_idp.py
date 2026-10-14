@@ -63,6 +63,7 @@ def discovery():
         "authorization_endpoint": f"{ISSUER}/authorize",
         "token_endpoint": f"{ISSUER}/token",
         "jwks_uri": f"{ISSUER}/jwks",
+        "end_session_endpoint": f"{ISSUER}/logout",
     }
 
 
@@ -81,6 +82,13 @@ def jwks():
             }
         ]
     }
+
+
+@app.get("/logout")
+def logout(request: Request):
+    """Provider-side end session: immediately bounce back to the RP."""
+    target = request.query_params.get("post_logout_redirect_uri") or "/"
+    return RedirectResponse(target, status_code=302)
 
 
 @app.get("/authorize")

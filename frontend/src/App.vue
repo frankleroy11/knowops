@@ -2,6 +2,7 @@
 import {ref, computed, onMounted, onUnmounted, watch} from 'vue'
 
 const TOKEN_KEY = 'knowops.token'
+const METHOD_KEY = 'knowops.login_method'
 
 const kbs = ref([]), selected = ref('all'), docs = ref([]), tab = ref('chat')
 const name = ref(''), description = ref(''), creating = ref(false), showCreate = ref(false)
@@ -12,6 +13,7 @@ const page = ref(0), loading = ref(false), action = ref(null)
 const token = ref(localStorage.getItem(TOKEN_KEY) || '')
 const me = ref(null), needsLogin = ref(false), loginToken = ref(''), loginError = ref(''), busyLogin = ref(false), ssoEnabled = ref(false)
 const loginEmail = ref(''), loginPassword = ref(''), busyPassword = ref(false)
+const loginMethod = ref(localStorage.getItem(METHOD_KEY) || '')
 
 const showAdmin = ref(false), users = ref([]), adminForm = ref({email: '', display_name: '', role: 'viewer', tenant_id: ''})
 const tenants = ref([]), tenantForm = ref({name: '', slug: ''})
@@ -130,8 +132,12 @@ async function signIn() {
     if (!r.ok) throw new Error(r.status === 401 ? 'Token 无效、已吊销或用户已停用' : '登录失败，请稍后重试')
     const profile = await r.json()
     token.value = loginToken.value.trim()
-    if (token.value) localStorage.setItem(TOKEN_KEY, token.value)
-    else localStorage.removeItem(TOKEN_KEY)
+    if (token.value) {
+      localStorage.setItem(TOKEN_KEY, token.value)
+      localStorage.setItem(METHOD_KEY, 'token'); loginMethod.value = 'token'
+    } else {
+      localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(METHOD_KEY); loginMethod.value = ''
+    }
     me.value = profile; needsLogin.value = false; loginToken.value = ''; loginError.value = ''
     await loadKB(); await loadDocs()
   } catch (e) { loginError.value = e.message } finally { busyLogin.value = false }
@@ -147,16 +153,23 @@ async function passwordLogin() {
     if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : '登录失败')
     token.value = data.token
     localStorage.setItem(TOKEN_KEY, data.token)
+    localStorage.setItem(METHOD_KEY, 'password'); loginMethod.value = 'password'
     loginEmail.value = ''; loginPassword.value = ''
     needsLogin.value = false
     me.value = await api('/auth/me')
     await loadKB(); await loadDocs()
   } catch (e) { loginError.value = e.message } finally { busyPassword.value = false }
 }
-function signOut() {
-  token.value = ''; localStorage.removeItem(TOKEN_KEY); me.value = null
-  kbs.value = []; docs.value = []; messages.value = []; users.value = []; members.value = []
+async function signOut() {
+  const wasSso = loginMethod.value === 'oidc'
+  if (token.value) {
+    try { await api('/auth/logout', {method: 'POST'}) } catch (e) { /* 本地清理优先 */ }
+  }
+  token.value = ''
+  localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(METHOD_KEY); loginMethod.value = ''
+  me.value = null; kbs.value = []; docs.value = []; messages.value = []; users.value = []; members.value = []
   showAdmin.value = false; showMembers.value = false; selected.value = 'all'; needsLogin.value = true
+  if (wasSso && ssoEnabled.value) location.href = '/api/v1/auth/oidc/logout'
 }
 async function loadSsoStatus() {
   try {

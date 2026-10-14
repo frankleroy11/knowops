@@ -110,15 +110,15 @@ def make_provider(signing_key, other_key, state_nonce: dict):
     def handler(request: httpx.Request) -> httpx.Response:
         url = str(request.url)
         if url.endswith("/.well-known/openid-configuration"):
-            return httpx.Response(
-                200,
-                json={
-                    "issuer": ISSUER,
-                    "authorization_endpoint": f"{ISSUER}/authorize",
-                    "token_endpoint": f"{ISSUER}/token",
-                    "jwks_uri": f"{ISSUER}/jwks",
-                },
-            )
+            metadata = {
+                "issuer": ISSUER,
+                "authorization_endpoint": f"{ISSUER}/authorize",
+                "token_endpoint": f"{ISSUER}/token",
+                "jwks_uri": f"{ISSUER}/jwks",
+            }
+            if not state_nonce.get("no_end_session"):
+                metadata["end_session_endpoint"] = f"{ISSUER}/logout"
+            return httpx.Response(200, json=metadata)
         if url.endswith("/jwks"):
             state_nonce["jwks_hits"] = state_nonce.get("jwks_hits", 0) + 1
             return httpx.Response(200, json=jwks_for(signing_key, state_nonce.get("kid", "primary")))
@@ -187,6 +187,7 @@ def provider(signing_key, other_key):
         "kid": "primary",
         "groups": None,
         "jwks_hits": 0,
+        "no_end_session": False,
     }
     reset_jwks_cache()
     handler = make_provider(signing_key, other_key, state)
@@ -472,3 +473,47 @@ def test_existing_account_role_sync_is_opt_in(client, provider, db_factory):
     assert second["user"]["role"] == "editor"
     with db_factory() as db:
         assert "user.oidc.role" in [row.action for row in db.scalars(select(AuditLog))]
+
+
+def test_single_logout_redirects_to_the_provider(client, provider):
+    response = client.get("/api/v1/auth/oidc/logout")
+    assert response.status_code == 302
+    location = urlparse(response.headers["location"])
+    query = parse_qs(location.query)
+    assert location.geturl().startswith(f"{ISSUER}/logout?")
+    assert query["client_id"] == [CLIENT_ID]
+    # Providers require an absolute URI; it is derived from the callback origin.
+    assert query["post_logout_redirect_uri"] == ["http://app.test/ui/"]
+
+
+def test_single_logout_can_return_json_for_api_clients(client, provider):
+    body = client.get("/api/v1/auth/oidc/logout?web=false").json()
+    assert body["logout_url"].startswith(f"{ISSUER}/logout?")
+
+
+def test_single_logout_without_provider_support_is_404(client, provider):
+    provider["no_end_session"] = True
+    try:
+        assert client.get("/api/v1/auth/oidc/logout").status_code == 404
+    finally:
+        provider["no_end_session"] = False
+
+
+def test_web_callback_records_the_login_method(client, provider):
+    state, nonce = begin_login(client, web=True)
+    provider["nonce"] = nonce
+    body = client.get(f"/api/v1/auth/oidc/callback?code=good-code&state={state}").text
+    assert "knowops.login_method" in body and '"oidc"' in body
+
+
+def test_post_logout_redirect_can_be_overridden_and_stay_absolute(client, provider):
+    settings = SETTINGS.model_copy(
+        update={"oidc_post_logout_redirect": "https://portal.example.com/bye"}
+    )
+    with (
+        patch.object(oidc_service, "get_settings", return_value=settings),
+        patch("app.modules.oidc.client.get_settings", return_value=settings),
+    ):
+        body = client.get("/api/v1/auth/oidc/logout?web=false").json()
+    query = parse_qs(urlparse(body["logout_url"]).query)
+    assert query["post_logout_redirect_uri"] == ["https://portal.example.com/bye"]

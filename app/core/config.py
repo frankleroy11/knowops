@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     oidc_role_sync: bool = False
     # 浏览器完成回调后跳回的前端地址
     oidc_web_redirect: str = "/ui/"
+    # 单点登出后回跳地址；留空则复用 oidc_web_redirect
+    oidc_post_logout_redirect: str = ""
 
     # --- 本地账号密码与 Token 生命周期 ---
     # 新签发 Token 的有效天数；0 表示不过期

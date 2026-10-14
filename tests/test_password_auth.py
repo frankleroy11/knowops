@@ -174,6 +174,14 @@ def test_logout_revokes_only_the_presented_token(client, enforced):
     assert client.post("/api/v1/auth/logout").json()["revoked"] == 0
 
 
+def test_logout_is_audited(client, enforced, db_factory):
+    token = login(client).json()["token"]
+    assert client.post("/api/v1/auth/logout", headers=bearer(token)).json()["revoked"] == 1
+    with db_factory() as db:
+        actions = [row.action for row in db.scalars(select(AuditLog))]
+    assert "auth.logout" in actions
+
+
 def test_change_password_requires_the_current_one(client, enforced):
     token = login(client).json()["token"]
     denied = client.post(

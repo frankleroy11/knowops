@@ -143,6 +143,15 @@ def issue_token(db: Session, user: User, label: str = "", ttl_days: int | None =
     return raw
 
 
+def token_owner(db: Session, authorization: str | None):
+    """The user behind the presented token, revoked or not (for audit trails)."""
+    raw = _bearer_token(authorization)
+    if raw is None:
+        return None
+    record = db.scalar(select(ApiToken).where(ApiToken.token_hash == hash_token(raw)))
+    return db.get(User, record.user_id) if record is not None else None
+
+
 def revoke_presented_token(db: Session, authorization: str | None) -> int:
     """Logout/rotation: revoke exactly the token that made the request."""
     raw = _bearer_token(authorization)

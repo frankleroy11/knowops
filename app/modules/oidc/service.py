@@ -3,7 +3,7 @@
 import json
 import secrets
 from datetime import datetime, timedelta
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -20,6 +20,7 @@ from app.modules.tenant import service as tenants
 
 STATE_TTL = timedelta(minutes=10)
 TOKEN_STORAGE_KEY = "knowops.token"
+METHOD_STORAGE_KEY = "knowops.login_method"
 
 
 def enabled() -> bool:
@@ -190,13 +191,44 @@ def map_user(db: Session, claims) -> User:
     return user
 
 
+def absolute_web_url(path: str) -> str:
+    """Providers require an absolute `post_logout_redirect_uri`; derive our origin
+    from the registered callback URL when only a path is configured."""
+    if not path or path.startswith(("http://", "https://")):
+        return path
+    callback = get_settings().oidc_redirect_uri
+    if not callback.startswith(("http://", "https://")):
+        return path
+    parts = urlsplit(callback)
+    return f"{parts.scheme}://{parts.netloc}{path}"
+
+
+def logout_url(metadata: dict) -> str | None:
+    """RP-initiated logout target, or None when the provider does not support it."""
+    endpoint = metadata.get("end_session_endpoint")
+    if not endpoint:
+        return None
+    settings = get_settings()
+    target = settings.oidc_post_logout_redirect or settings.oidc_web_redirect
+    query = urlencode(
+        {
+            "client_id": settings.oidc_client_id,
+            "post_logout_redirect_uri": absolute_web_url(target),
+        }
+    )
+    return endpoint + ("&" if "?" in endpoint else "?") + query
+
+
 def web_callback_html(token: str) -> str:
     """Hand the freshly issued token to the SPA without putting it in the URL."""
     settings = get_settings()
     target = settings.oidc_web_redirect or "/ui/"
     script = (
-        "localStorage.setItem(KEY, TOKEN);\nlocation.replace(TARGET);"
-        .replace("KEY", json.dumps(TOKEN_STORAGE_KEY))
+        "localStorage.setItem(TOKEN_KEY, TOKEN);\n"
+        "localStorage.setItem(METHOD_KEY, \"oidc\");\n"
+        "location.replace(TARGET);"
+        .replace("TOKEN_KEY", json.dumps(TOKEN_STORAGE_KEY))
+        .replace("METHOD_KEY", json.dumps(METHOD_STORAGE_KEY))
         .replace("TOKEN", json.dumps(token))
         .replace("TARGET", json.dumps(target))
     )

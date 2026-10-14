@@ -169,7 +169,11 @@ def change_password(body: PasswordChange, db: DB, principal: CurrentPrincipal):
 
 @router.post("/auth/logout")
 def logout(db: DB, authorization: Annotated[str | None, Header()] = None):
-    return {"revoked": service.revoke_presented_token(db, authorization)}
+    user = service.token_owner(db, authorization)
+    revoked = service.revoke_presented_token(db, authorization)
+    if user is not None and revoked:
+        audit.record(db, user, "auth.logout", "user", user.id, f"email={user.email}"[:512])
+    return {"revoked": revoked}
 
 
 @router.post("/auth/token/rotate", response_model=SessionOut)
