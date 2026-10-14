@@ -10,18 +10,29 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.modules.audit import service as audit
-from app.modules.auth.models import KB_ROLES, ROLES, ApiToken, KbMember, User
+from app.modules.auth.models import (
+    KB_ROLES,
+    ROLES,
+    ApiToken,
+    KbMember,
+    LoginAttempt,
+    PasswordHistory,
+    PasswordReset,
+    User,
+)
 from app.modules.auth.principal import ADMIN, LOCAL_ADMIN, Principal
 from app.modules.auth.security import (
     generate_token,
+    generate_totp_secret,
     hash_password,
     hash_token,
     verify_password,
+    verify_totp,
 )
 from app.modules.knowledge.models import KnowledgeBase
 
@@ -129,7 +140,13 @@ def token_expiry(ttl_days: int | None = None) -> datetime | None:
     return datetime.now() + timedelta(days=days) if days else None
 
 
-def issue_token(db: Session, user: User, label: str = "", ttl_days: int | None = None) -> str:
+def issue_token(
+    db: Session,
+    user: User,
+    label: str = "",
+    ttl_days: int | None = None,
+    id_token: str | None = None,
+) -> str:
     raw = generate_token()
     db.add(
         ApiToken(
@@ -137,6 +154,7 @@ def issue_token(db: Session, user: User, label: str = "", ttl_days: int | None =
             token_hash=hash_token(raw),
             label=label.strip(),
             expires_at=token_expiry(ttl_days),
+            id_token=id_token,
         )
     )
     db.commit()
@@ -278,15 +296,205 @@ def require_admin(principal: Principal) -> None:
         raise HTTPException(403, "需要管理员权限")
 
 
-def validate_password(password: str) -> str:
-    minimum = get_settings().password_min_length
-    if len(password or "") < minimum:
-        raise HTTPException(422, f"密码至少 {minimum} 位")
-    return password
+WEAK_PASSWORDS = frozenset(
+    {
+        "password",
+        "password1",
+        "password123",
+        "12345678",
+        "123456789",
+        "qwertyui",
+        "qwerty123",
+        "abcd1234",
+        "admin123",
+        "admin12345",
+        "knowops123",
+    }
+)
+
+
+def validate_password(password: str, user: User | None = None, db: Session | None = None) -> str:
+    """口令复杂度 + 历史：长度、字母数字混合、不能是邮箱名、不能是弱口令、不能与最近 N 次重复。"""
+    settings = get_settings()
+    candidate = password or ""
+    if len(candidate) < settings.password_min_length:
+        raise HTTPException(422, f"密码至少 {settings.password_min_length} 位")
+    if settings.password_require_mixed and not (
+        any(ch.isalpha() for ch in candidate) and any(ch.isdigit() for ch in candidate)
+    ):
+        raise HTTPException(422, "密码需同时包含字母与数字")
+    if candidate.lower() in WEAK_PASSWORDS:
+        raise HTTPException(422, "密码过于常见，请更换")
+    if user is not None:
+        local_part = (user.email or "").split("@")[0].lower()
+        if local_part and local_part in candidate.lower():
+            raise HTTPException(422, "密码不能包含邮箱名")
+        if db is not None and settings.password_history_size:
+            recent = list(
+                db.scalars(
+                    select(PasswordHistory.password_hash)
+                    .where(PasswordHistory.user_id == user.id)
+                    .order_by(PasswordHistory.id.desc())
+                    .limit(settings.password_history_size)
+                )
+            )
+            if user.password_hash:
+                recent.append(user.password_hash)
+            if any(verify_password(candidate, previous) for previous in recent):
+                raise HTTPException(422, f"不能使用最近 {settings.password_history_size} 次用过的密码")
+    return candidate
+
+
+def remember_password(db: Session, user: User) -> None:
+    """把当前口令摘要记入历史表，并只保留最近 N 条。"""
+    if not user.password_hash:
+        return
+    db.add(PasswordHistory(user_id=user.id, password_hash=user.password_hash))
+    db.commit()
+    keep = get_settings().password_history_size
+    if keep <= 0:
+        db.execute(delete(PasswordHistory).where(PasswordHistory.user_id == user.id))
+        db.commit()
+        return
+    stale = list(
+        db.scalars(
+            select(PasswordHistory)
+            .where(PasswordHistory.user_id == user.id)
+            .order_by(PasswordHistory.id.desc())
+            .offset(keep)
+        )
+    )
+    for row in stale:
+        db.delete(row)
+    if stale:
+        db.commit()
+
+
+def record_login_attempt(db: Session, email: str, ip: str = "") -> None:
+    """记录一次失败尝试，并顺手清掉窗口外的旧记录。"""
+    # 用 API 时钟写入：限流窗口也按同一时钟比较（数据库可能是 UTC）
+    db.add(
+        LoginAttempt(
+            email=(email or "").strip().lower(), ip=ip or "", created_at=datetime.now()
+        )
+    )
+    db.commit()
+    window = get_settings().login_attempt_window_minutes
+    cutoff = datetime.now() - timedelta(minutes=window * 4)
+    db.execute(delete(LoginAttempt).where(LoginAttempt.created_at < cutoff))
+    db.commit()
+
+
+def enforce_ip_rate_limit(db: Session, ip: str) -> None:
+    """按来源 IP 限制失败次数：与账号级锁定互补，防撞库。"""
+    if not ip:
+        return
+    settings = get_settings()
+    since = datetime.now() - timedelta(minutes=settings.login_attempt_window_minutes)
+    failures = (
+        db.scalar(
+            select(func.count())
+            .select_from(LoginAttempt)
+            .where(LoginAttempt.ip == ip, LoginAttempt.created_at >= since)
+        )
+        or 0
+    )
+    if failures >= settings.login_attempts_per_ip:
+        raise HTTPException(429, "该来源登录尝试过于频繁，请稍后再试")
+
+
+def clear_login_attempts(db: Session, email: str, ip: str = "") -> None:
+    """成功登录后清掉该账号的失败记录。
+
+    同时清掉同一来源 IP 的记录：企业内网常见多人共用一个出口 IP，若不清零，
+    几次输错口令就会把整个出口锁到窗口结束。取舍是：攻击者若已掌握一个有效账号，
+    可通过一次成功登录重置该 IP 的计数——但此时它已不再是"盲撞库"场景。
+    """
+    conditions = [LoginAttempt.email == (email or "").strip().lower()]
+    if ip:
+        from sqlalchemy import or_
+
+        conditions = [or_(LoginAttempt.email == (email or "").strip().lower(), LoginAttempt.ip == ip)]
+    db.execute(delete(LoginAttempt).where(*conditions))
+    db.commit()
+
+
+# ---- 二次验证（TOTP）----
+
+
+def start_totp(db: Session, user: User) -> str:
+    if user.totp_enabled:
+        raise HTTPException(409, "已启用二次验证；如需更换请先停用")
+    user.totp_secret = generate_totp_secret()
+    db.commit()
+    return user.totp_secret
+
+
+def enable_totp(db: Session, user: User, code: str) -> User:
+    if user.totp_enabled:
+        raise HTTPException(409, "二次验证已启用")
+    if not user.totp_secret:
+        raise HTTPException(409, "请先调用 /auth/2fa/setup 获取密钥")
+    if not verify_totp(user.totp_secret, code, get_settings().totp_window):
+        raise HTTPException(401, "验证码不正确")
+    user.totp_enabled = True
+    db.commit()
+    audit.record(db, user, "user.2fa.enable", "user", user.id, f"email={user.email}")
+    return user
+
+
+def disable_totp(db: Session, user: User, code: str) -> User:
+    if not user.totp_enabled:
+        raise HTTPException(409, "当前未启用二次验证")
+    if not verify_totp(user.totp_secret, code, get_settings().totp_window):
+        raise HTTPException(401, "验证码不正确")
+    user.totp_enabled = False
+    user.totp_secret = None
+    db.commit()
+    audit.record(db, user, "user.2fa.disable", "user", user.id, f"email={user.email}")
+    return user
+
+
+# ---- 自助重置令牌 ----
+
+
+def create_reset_token(db: Session, user: User, ttl_minutes: int | None = None) -> str:
+    settings = get_settings()
+    ttl = settings.password_reset_ttl_minutes if ttl_minutes is None else ttl_minutes
+    raw = generate_token()
+    db.add(
+        PasswordReset(
+            user_id=user.id,
+            token_hash=hash_token(raw),
+            expires_at=datetime.now() + timedelta(minutes=ttl),
+        )
+    )
+    db.commit()
+    audit.record(
+        db, user, "user.password.reset_requested", "user", user.id, f"email={user.email}"
+    )
+    return raw
+
+
+def consume_reset_token(db: Session, raw: str, new_password: str) -> User:
+    record = db.scalar(select(PasswordReset).where(PasswordReset.token_hash == hash_token(raw)))
+    if record is None or record.used_at is not None or record.expires_at <= datetime.now():
+        raise HTTPException(400, "重置链接无效或已过期")
+    user = db.get(User, record.user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(400, "重置链接无效或已过期")
+    record.used_at = datetime.now()
+    set_password(db, user, new_password, actor=user)
+    # 口令已重置：吊销所有旧 Token，并要求重新登录
+    revoke_tokens(db, user)
+    audit.record(db, user, "user.password.reset_completed", "user", user.id, f"email={user.email}")
+    return user
+
 
 
 def set_password(db: Session, user: User, password: str, actor=None) -> User:
-    validate_password(password)
+    validate_password(password, user=user, db=db)
+    remember_password(db, user)
     user.password_hash = hash_password(password)
     user.failed_logins = 0
     user.locked_until = None
@@ -314,15 +522,20 @@ def _dummy_password_hash() -> str:
     return hash_password(secrets.token_urlsafe(24))
 
 
-def authenticate_password(db: Session, email: str, password: str) -> User:
+def authenticate_password(
+    db: Session, email: str, password: str, code: str | None = None, ip: str = ""
+) -> User:
     settings = get_settings()
+    enforce_ip_rate_limit(db, ip)
     user = db.scalar(select(User).where(User.email == (email or "").strip().lower()))
     generic = HTTPException(401, "邮箱或密码不正确")
     if user is None:
         verify_password(password, _dummy_password_hash())
+        record_login_attempt(db, email, ip)
         raise generic
     if not user.is_active:
         verify_password(password, _dummy_password_hash())
+        record_login_attempt(db, email, ip)
         raise generic
     now = datetime.now()
     if user.locked_until is not None and user.locked_until > now:
@@ -334,10 +547,18 @@ def authenticate_password(db: Session, email: str, password: str) -> User:
             user.locked_until = now + timedelta(minutes=settings.login_lockout_minutes)
             user.failed_logins = 0
         db.commit()
+        record_login_attempt(db, email, ip)
         raise generic
+    if user.totp_enabled:
+        if not code:
+            raise HTTPException(401, "需要二次验证码")
+        if not verify_totp(user.totp_secret, code, settings.totp_window):
+            record_login_attempt(db, email, ip)
+            raise HTTPException(401, "二次验证码不正确")
     user.failed_logins = 0
     user.locked_until = None
     db.commit()
+    clear_login_attempts(db, email, ip)
     return user
 
 
@@ -436,3 +657,10 @@ def remove_membership(db: Session, kb_id: int, user_id: int) -> None:
         raise HTTPException(409, "知识库至少保留一个 owner")
     db.delete(member)
     db.commit()
+
+
+def presented_token(db: Session, authorization: str | None) -> ApiToken | None:
+    raw = _bearer_token(authorization)
+    if raw is None:
+        return None
+    return db.scalar(select(ApiToken).where(ApiToken.token_hash == hash_token(raw)))

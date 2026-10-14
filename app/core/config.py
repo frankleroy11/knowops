@@ -56,6 +56,19 @@ class Settings(BaseSettings):
     # 连续失败次数达到上限后锁定一段时间
     login_max_failures: int = Field(default=5, ge=1, le=100)
     login_lockout_minutes: int = Field(default=15, ge=1, le=1440)
+    # 口令复杂度与历史：必须含字母与数字，且不得与最近 N 次重复；0 表示不查历史
+    password_require_mixed: bool = True
+    password_history_size: int = Field(default=5, ge=0, le=50)
+    # 按来源 IP 的登录尝试窗口（与账号锁定互补）
+    login_attempt_window_minutes: int = Field(default=10, ge=1, le=1440)
+    login_attempts_per_ip: int = Field(default=20, ge=1, le=1000)
+    # 自助重置令牌
+    password_reset_ttl_minutes: int = Field(default=30, ge=5, le=1440)
+    # 未配置邮件通道时，是否在响应里直接返回重置令牌（仅本地调试，生产必须为 false）
+    auth_dev_reveal_reset_token: bool = False
+    # 二次验证（TOTP）
+    totp_issuer_name: str = "KnowOps"
+    totp_window: int = Field(default=1, ge=0, le=5)
 
     # --- Embedding 适配器 ---
     # provider: bge_m3 = 真实本地模型；hash = 无模型依赖的确定性假向量，仅用于测试与离线开发

@@ -186,18 +186,18 @@ def test_change_password_requires_the_current_one(client, enforced):
     token = login(client).json()["token"]
     denied = client.post(
         "/api/v1/auth/password",
-        json={"current_password": "not-it", "new_password": "brand-new-pass"},
+        json={"current_password": "not-it", "new_password": "Brand-new-pass9"},
         headers=bearer(token),
     )
     assert denied.status_code == 401
     changed = client.post(
         "/api/v1/auth/password",
-        json={"current_password": PASSWORD, "new_password": "brand-new-pass"},
+        json={"current_password": PASSWORD, "new_password": "Brand-new-pass9"},
         headers=bearer(token),
     )
     assert changed.status_code == 200
     assert login(client).status_code == 401
-    assert login(client, password="brand-new-pass").status_code == 200
+    assert login(client, password="Brand-new-pass9").status_code == 200
 
 
 def test_short_passwords_are_rejected(client, enforced):
@@ -213,11 +213,11 @@ def test_short_passwords_are_rejected(client, enforced):
 def test_admin_can_reset_a_password_inside_its_tenant(client, enforced, db_factory):
     reset = client.post(
         "/api/v1/admin/users/2/password",
-        json={"password": "reset-by-admin"},
+        json={"password": "Reset-by-admin9"},
         headers=bearer("admin-token"),
     )
     assert reset.status_code == 200
-    assert login(client, password="reset-by-admin").status_code == 200
+    assert login(client, password="Reset-by-admin9").status_code == 200
     assert login(client).status_code == 401
 
 

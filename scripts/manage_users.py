@@ -89,6 +89,10 @@ def build_parser() -> argparse.ArgumentParser:
     password.add_argument("--email", required=True)
     password.add_argument("--password", required=True)
 
+    reset = sub.add_parser("reset-token", help="生成一次性自助重置令牌（管理员转交用户）")
+    reset.add_argument("--email", required=True)
+    reset.add_argument("--ttl-minutes", type=int, default=None)
+
     revoke = sub.add_parser("revoke-tokens", help="吊销某用户的全部 token")
     revoke.add_argument("--email", required=True)
 
@@ -136,6 +140,12 @@ def run(db, args) -> None:
         user = require_user(db, args.email)
         print_token(service.issue_token(db, user, args.label, args.days))
         audit.record(db, CLI_ACTOR, "token.issue", "user", user.id, f"label={args.label}"[:512])
+    elif args.command == "reset-token":
+        user = require_user(db, args.email)
+        raw = service.create_reset_token(db, user, args.ttl_minutes)
+        print(f"已为用户 {user.email} 生成一次性重置令牌（过期时间见下）")
+        print(f"  {raw}")
+        print("  在登录页使用 POST /api/v1/auth/password/reset 提交 {token, new_password}")
     elif args.command == "set-password":
         user = require_user(db, args.email)
         service.set_password(db, user, args.password, actor=CLI_ACTOR)

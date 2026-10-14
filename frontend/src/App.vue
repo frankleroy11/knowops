@@ -231,15 +231,20 @@ async function passwordLogin() {
 }
 async function signOut() {
   const wasSso = loginMethod.value === 'oidc'
+  let oidcLogoutUrl = ''
   if (token.value) {
-    try { await api('/auth/logout', {method: 'POST'}) } catch (e) { /* 本地清理优先 */ }
+    try {
+      const result = await api('/auth/logout', {method: 'POST'})
+      oidcLogoutUrl = result?.oidc_logout_url || ''
+    } catch (e) { /* 本地清理优先 */ }
   }
   token.value = ''
   conversations.clear(); persistence.clear()
   localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(METHOD_KEY); loginMethod.value = ''
   me.value = null; kbs.value = []; docs.value = []; messages.value = []; users.value = []; members.value = []
   showAdmin.value = false; showMembers.value = false; selected.value = 'all'; needsLogin.value = true
-  if (wasSso && ssoEnabled.value) location.href = '/api/v1/auth/oidc/logout'
+  if (oidcLogoutUrl) location.href = oidcLogoutUrl
+  else if (wasSso && ssoEnabled.value) location.href = '/api/v1/auth/oidc/logout'
 }
 async function loadSsoStatus() {
   try {

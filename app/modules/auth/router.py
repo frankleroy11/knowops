@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.db.deps import DB
@@ -10,6 +10,8 @@ from app.modules.audit import service as audit
 from app.modules.auth import service
 from app.modules.auth.deps import AdminPrincipal, CurrentPrincipal
 from app.modules.auth.models import User
+from app.modules.auth.security import totp_uri
+from app.modules.oidc import service as oidc_service
 from app.modules.tenant import service as tenants
 
 router = APIRouter(tags=["认证与用户管理"])
@@ -27,6 +29,7 @@ class MeOut(BaseModel):
     local: bool
     is_admin: bool
     can_author: bool
+    totp_enabled: bool = False
 
 
 class UserOut(BaseModel):
@@ -90,8 +93,15 @@ def resolve_tenant_id(db, principal, requested: int | None) -> int | None:
     return tenant_id
 
 
+def me_totp_enabled(db, principal) -> bool:
+    if principal.id is None:
+        return False
+    user = db.get(User, principal.id)
+    return bool(user and user.totp_enabled)
+
+
 @router.get("/auth/me", response_model=MeOut)
-def me(principal: CurrentPrincipal):
+def me(db: DB, principal: CurrentPrincipal):
     """In AUTH_MODE=off this returns the local administrator without a token,
     which is how the UI knows it may skip the login screen."""
     return MeOut(
@@ -104,12 +114,14 @@ def me(principal: CurrentPrincipal):
         local=principal.local,
         is_admin=principal.is_admin,
         can_author=principal.can_author,
+        totp_enabled=me_totp_enabled(db, principal),
     )
 
 
 class PasswordLogin(BaseModel):
     email: str = Field(min_length=3, max_length=255)
     password: str = Field(min_length=1, max_length=256)
+    code: str = Field(default="", max_length=16, description="启用二次验证时必填的 TOTP 验证码")
 
 
 class PasswordChange(BaseModel):
@@ -147,10 +159,11 @@ def require_realm(feature: str) -> None:
 
 
 @router.post("/auth/password/login", response_model=SessionOut)
-def password_login(body: PasswordLogin, db: DB):
-    """Local account login: email + password in exchange for an API token."""
+def password_login(body: PasswordLogin, db: DB, request: Request):
+    """Local account login: email + password (+ TOTP when enabled) -> API token."""
     require_realm("账号密码登录")
-    user = service.authenticate_password(db, body.email, body.password)
+    client_ip = request.client.host if request.client else ""
+    user = service.authenticate_password(db, body.email, body.password, body.code, client_ip)
     raw = service.issue_token(db, user, "password")
     audit.record(db, user, "auth.password.login", "user", user.id, f"email={user.email}")
     return session_out(user, raw, service.token_expiry())
@@ -169,11 +182,13 @@ def change_password(body: PasswordChange, db: DB, principal: CurrentPrincipal):
 
 @router.post("/auth/logout")
 def logout(db: DB, authorization: Annotated[str | None, Header()] = None):
+    """吊销当前 Token；若是 SSO 登录，同时给出带 id_token_hint 的提供方登出地址。"""
     user = service.token_owner(db, authorization)
+    oidc_logout_url = oidc_service.logout_url_for_token(db, authorization)
     revoked = service.revoke_presented_token(db, authorization)
     if user is not None and revoked:
         audit.record(db, user, "auth.logout", "user", user.id, f"email={user.email}"[:512])
-    return {"revoked": revoked}
+    return {"revoked": revoked, "oidc_logout_url": oidc_logout_url}
 
 
 @router.post("/auth/token/rotate", response_model=SessionOut)
@@ -263,6 +278,85 @@ def revoke_tokens(user_id: int, db: DB, principal: AdminPrincipal):
     revoked = service.revoke_tokens(db, user)
     audit.record(db, principal, "token.revoke", "user", user.id, f"revoked={revoked}")
     return {"user_id": user.id, "revoked": revoked}
+
+
+class ResetRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+
+
+class ResetConfirm(BaseModel):
+    token: str = Field(min_length=8, max_length=256)
+    new_password: str = Field(min_length=8, max_length=256)
+
+
+class TotpCode(BaseModel):
+    code: str = Field(min_length=6, max_length=16)
+
+
+class TotpSetupOut(BaseModel):
+    secret: str
+    otpauth_uri: str
+
+
+@router.post("/auth/password/forgot", status_code=202)
+def forgot_password(body: ResetRequest, db: DB):
+    """自助重置第一步：生成一次性令牌。
+
+    统一返回同样的提示，避免暴露邮箱是否存在。未配置邮件通道时，
+    只有在 AUTH_DEV_REVEAL_RESET_TOKEN=true 的本地调试模式下才会把令牌直接返回。
+    """
+    require_realm("自助重置口令")
+    user = service.find_user_by_email(db, body.email)
+    token = None
+    if user is not None and user.is_active:
+        raw = service.create_reset_token(db, user)
+        if service.get_settings().auth_dev_reveal_reset_token:
+            token = raw
+    payload = {"detail": "如果该邮箱存在，重置指引已发出。"}
+    if token:
+        payload["dev_reset_token"] = token
+    return payload
+
+
+@router.post("/auth/password/reset")
+def reset_password_with_token(body: ResetConfirm, db: DB):
+    require_realm("自助重置口令")
+    user = service.consume_reset_token(db, body.token, body.new_password)
+    return {"email": user.email, "ok": True}
+
+
+@router.post("/auth/2fa/setup", response_model=TotpSetupOut)
+def totp_setup(db: DB, principal: CurrentPrincipal):
+    """生成 TOTP 密钥与 otpauth 链接；此时尚未启用，需要一次验证码确认。"""
+    user = require_local_user(db, principal)
+    secret = service.start_totp(db, user)
+    return TotpSetupOut(
+        secret=secret,
+        otpauth_uri=totp_uri(secret, user.email, service.get_settings().totp_issuer_name),
+    )
+
+
+@router.post("/auth/2fa/enable")
+def totp_enable(body: TotpCode, db: DB, principal: CurrentPrincipal):
+    user = require_local_user(db, principal)
+    service.enable_totp(db, user, body.code)
+    return {"totp_enabled": True}
+
+
+@router.post("/auth/2fa/disable")
+def totp_disable(body: TotpCode, db: DB, principal: CurrentPrincipal):
+    user = require_local_user(db, principal)
+    service.disable_totp(db, user, body.code)
+    return {"totp_enabled": False}
+
+
+def require_local_user(db, principal):
+    if principal.id is None:
+        raise HTTPException(404, "本地免鉴权模式下没有本地账号")
+    user = db.get(User, principal.id)
+    if user is None:
+        raise HTTPException(404, "用户不存在")
+    return user
 
 
 @router.post("/admin/users/{user_id}/password")

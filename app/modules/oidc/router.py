@@ -27,6 +27,7 @@ def status():
 def start(db: DB, web: bool = True):
     """Begin the authorization-code flow; state and nonce are stored server-side."""
     service.require_enabled()
+    service.prune_login_states(db)  # 顺手清理过期/已消费的登录状态
     login_state = service.create_login_state(db, web)
     metadata = OidcClient().discovery()
     return RedirectResponse(
@@ -60,8 +61,8 @@ def callback(db: DB, code: str = "", state: str = "", error: str = ""):
     if not code:
         raise HTTPException(400, "缺少授权码")
     login_state = service.consume_login_state(db, state)
-    user = service.authenticate(db, code, login_state)
-    raw = auth_service.issue_token(db, user, "oidc")
+    user, id_token = service.authenticate(db, code, login_state)
+    raw = auth_service.issue_token(db, user, "oidc", id_token=id_token)
     audit.record(db, user, "auth.oidc.login", "user", user.id, f"email={user.email}")
     if login_state.web:
         return HTMLResponse(service.web_callback_html(raw))

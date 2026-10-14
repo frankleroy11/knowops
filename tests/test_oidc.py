@@ -21,6 +21,7 @@ from app.main import app
 from app.modules.audit.models import AuditLog
 from app.modules.auth import service as auth_service
 from app.modules.auth.models import User
+from app.modules.auth.security import hash_password
 from app.modules.oidc import service as oidc_service
 from app.modules.oidc import tokens as oidc_tokens
 from app.modules.oidc.client import reset_jwks_cache
@@ -517,3 +518,38 @@ def test_post_logout_redirect_can_be_overridden_and_stay_absolute(client, provid
         body = client.get("/api/v1/auth/oidc/logout?web=false").json()
     query = parse_qs(urlparse(body["logout_url"]).query)
     assert query["post_logout_redirect_uri"] == ["https://portal.example.com/bye"]
+
+
+def test_logout_returns_a_hint_url_for_sso_sessions(client, provider):
+    """SSO 登录的本地 Token 保存了 ID Token，登出时应给出带 id_token_hint 的地址。"""
+    state, nonce = begin_login(client, web=False)
+    provider["nonce"] = nonce
+    token = client.get(f"/api/v1/auth/oidc/callback?code=good-code&state={state}").json()["token"]
+
+    body = client.post("/api/v1/auth/logout", headers={"Authorization": f"Bearer {token}"}).json()
+    assert body["revoked"] == 1
+    assert body["oidc_logout_url"] is not None
+    query = parse_qs(urlparse(body["oidc_logout_url"]).query)
+    assert body["oidc_logout_url"].startswith(f"{ISSUER}/logout?")
+    assert query["id_token_hint"][0].count(".") == 2  # 确实是 JWT
+    assert query["post_logout_redirect_uri"] == ["http://app.test/ui/"]
+
+
+def test_password_sessions_have_no_oidc_hint(client, provider, db_factory, enforced):
+    """本地密码登录的 Token 没有 ID Token，因此不应给出提供方登出地址。"""
+    with db_factory.begin() as db:
+        db.add(
+            User(
+                id=21,
+                email="local@corp",
+                role="viewer",
+                tenant_id=1,
+                password_hash=hash_password("Local-Pass9"),
+            )
+        )
+    token = client.post(
+        "/api/v1/auth/password/login",
+        json={"email": "local@corp", "password": "Local-Pass9"},
+    ).json()["token"]
+    body = client.post("/api/v1/auth/logout", headers={"Authorization": f"Bearer {token}"}).json()
+    assert body["revoked"] == 1 and body["oidc_logout_url"] is None

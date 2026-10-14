@@ -124,6 +124,7 @@ def test_auth_me_requires_token_in_enforced_mode(client, enforced):
         "local": False,
         "is_admin": False,
         "can_author": False,
+        "totp_enabled": False,
     }
 
 

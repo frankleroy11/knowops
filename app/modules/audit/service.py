@@ -11,7 +11,9 @@ administrator acting on tenant A's knowledge base must still produce an entry
 that tenant A can see.
 """
 
-from sqlalchemy import select
+from datetime import datetime
+
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.modules.audit.models import AuditLog
@@ -66,6 +68,8 @@ def record(
     if tenant_id is None:
         tenant_id = getattr(actor, "tenant_id", None)
     entry = AuditLog(
+        # 用 API 时钟写入：保留策略与导出都按同一时钟比较，避免 DB(UTC) 与本地混用
+        created_at=datetime.now(),
         actor_id=getattr(actor, "id", None),
         actor_email=getattr(actor, "email", "") or "",
         tenant_id=tenant_id,
@@ -86,6 +90,7 @@ def list_entries(
     action: str | None = None,
     object_type: str | None = None,
     tenant_id: int | None = None,
+    max_limit: int = 200,
 ) -> list[AuditLog]:
     query = select(AuditLog).order_by(AuditLog.id.desc())
     if tenant_id is not None:
@@ -94,4 +99,11 @@ def list_entries(
         query = query.where(AuditLog.action == action)
     if object_type:
         query = query.where(AuditLog.object_type == object_type)
-    return list(db.scalars(query.offset(max(0, offset)).limit(min(max(1, limit), 200))))
+    return list(db.scalars(query.offset(max(0, offset)).limit(min(max(1, limit), max_limit))))
+
+
+def prune(db: Session, before: datetime) -> int:
+    """删除 `before` 之前的审计记录（保留策略由调用方决定天数）。"""
+    result = db.execute(delete(AuditLog).where(AuditLog.created_at < before))
+    db.commit()
+    return result.rowcount or 0

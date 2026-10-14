@@ -59,6 +59,20 @@ def consume_login_state(db: Session, state: str) -> OidcLoginState:
     return row
 
 
+def prune_login_states(db: Session, ttl_minutes: int = 10) -> int:
+    """删除已消费或过期的登录状态，避免表无限增长（登录开始时顺手调用）。"""
+    from sqlalchemy import delete, or_
+
+    cutoff = datetime.now() - timedelta(minutes=ttl_minutes)
+    result = db.execute(
+        delete(OidcLoginState).where(
+            or_(OidcLoginState.consumed_at.is_not(None), OidcLoginState.created_at < cutoff)
+        )
+    )
+    db.commit()
+    return result.rowcount or 0
+
+
 def authorization_url(metadata: dict, state: str, nonce: str) -> str:
     settings = get_settings()
     query = urlencode(
@@ -75,7 +89,7 @@ def authorization_url(metadata: dict, state: str, nonce: str) -> str:
     return endpoint + ("&" if "?" in endpoint else "?") + query
 
 
-def authenticate(db: Session, code: str, login_state: OidcLoginState) -> User:
+def authenticate(db: Session, code: str, login_state: OidcLoginState) -> tuple[User, str]:
     settings = get_settings()
     client = OidcClient(settings)
     metadata = client.discovery()
@@ -102,7 +116,7 @@ def authenticate(db: Session, code: str, login_state: OidcLoginState) -> User:
             raise HTTPException(401, f"ID token 校验失败：{exc}") from None
     except TokenError as exc:
         raise HTTPException(401, f"ID token 校验失败：{exc}") from None
-    return map_user(db, claims)
+    return map_user(db, claims), tokens["id_token"]
 
 
 def mapped_role(settings, claims) -> str | None:
@@ -203,20 +217,37 @@ def absolute_web_url(path: str) -> str:
     return f"{parts.scheme}://{parts.netloc}{path}"
 
 
-def logout_url(metadata: dict) -> str | None:
-    """RP-initiated logout target, or None when the provider does not support it."""
+def logout_url(metadata: dict, id_token: str | None = None) -> str | None:
+    """RP-initiated logout target, or None when the provider does not support it.
+
+    `id_token_hint` 让提供方知道要结束哪个会话；只有 SSO 登录的 Token 才会带上它。
+    """
     endpoint = metadata.get("end_session_endpoint")
     if not endpoint:
         return None
     settings = get_settings()
     target = settings.oidc_post_logout_redirect or settings.oidc_web_redirect
-    query = urlencode(
-        {
-            "client_id": settings.oidc_client_id,
-            "post_logout_redirect_uri": absolute_web_url(target),
-        }
-    )
+    params = {
+        "client_id": settings.oidc_client_id,
+        "post_logout_redirect_uri": absolute_web_url(target),
+    }
+    if id_token:
+        params["id_token_hint"] = id_token
+    query = urlencode(params)
     return endpoint + ("&" if "?" in endpoint else "?") + query
+
+
+def logout_url_for_token(db, authorization: str | None) -> str | None:
+    """Best-effort：拿请求所用 Token 保存的 ID Token 生成登出地址；失败不影响本地登出。"""
+    if not enabled():
+        return None
+    record = auth_service.presented_token(db, authorization)
+    if record is None or not record.id_token:
+        return None
+    try:
+        return logout_url(OidcClient().discovery(), record.id_token)
+    except HTTPException:
+        return None
 
 
 def web_callback_html(token: str) -> str:
