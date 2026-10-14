@@ -21,12 +21,12 @@ const me = ref(null), needsLogin = ref(false), loginToken = ref(''), loginError 
 const loginEmail = ref(''), loginPassword = ref(''), busyPassword = ref(false)
 const loginMethod = ref(localStorage.getItem(METHOD_KEY) || '')
 
-const showAdmin = ref(false), users = ref([]), adminForm = ref({email: '', display_name: '', role: 'viewer', tenant_id: ''})
+const users = ref([]), adminForm = ref({email: '', display_name: '', role: 'viewer', tenant_id: ''})
 const tenants = ref([]), tenantForm = ref({name: '', slug: ''})
 const issuedToken = ref(''), adminBusy = ref(false)
 const showMembers = ref(false), members = ref([]), memberForm = ref({email: '', role: 'viewer'})
 const showReviews = ref(false), reviews = ref([]), reviewNote = ref('')
-const showAudit = ref(false), auditLogs = ref([]), auditTenant = ref('')
+const auditLogs = ref([]), auditTenant = ref('')
 
 // 登录页（含二次验证码与自助重置）
 const loginCode = ref(''), needCode = ref(false)
@@ -38,6 +38,11 @@ const pwForm = ref({current_password: '', new_password: ''})
 const totpSecret = ref(''), totpUri = ref(''), totpCode = ref(''), busySecurity = ref(false)
 // 顶部导航的浮层
 const showKbList = ref(false), showUserMenu = ref(false)
+
+// 界面模式：企业用户工作台（问答为主） / 管理控制台（仅管理员可见）
+const MODE_KEY = 'knowops.mode'
+const mode = ref(localStorage.getItem(MODE_KEY) === 'console' ? 'console' : 'workspace')
+const consoleSection = ref('knowledge')
 
 const unified = computed(() => selected.value === 'all')
 const kb = computed(() => kbs.value.find(k => k.id === selected.value))
@@ -257,7 +262,8 @@ async function signOut() {
   conversations.clear(); persistence.clear()
   localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(METHOD_KEY); loginMethod.value = ''
   me.value = null; kbs.value = []; docs.value = []; messages.value = []; users.value = []; members.value = []
-  showAdmin.value = false; showMembers.value = false; selected.value = 'all'; needsLogin.value = true
+  showMembers.value = false; selected.value = 'all'; needsLogin.value = true
+  mode.value = 'workspace'; consoleSection.value = 'knowledge'
   if (oidcLogoutUrl) location.href = oidcLogoutUrl
   else if (wasSso && ssoEnabled.value) location.href = '/api/v1/auth/oidc/logout'
 }
@@ -373,12 +379,44 @@ async function setUserTenant(u, value) {
   adminBusy.value = true; error.value = ''
   try {
     await api(`/admin/users/${u.id}`, patch({tenant_id: value === '' ? null : Number(value)}))
-    await openAdmin()
-  } catch (e) { fail(e); await openAdmin() } finally { adminBusy.value = false }
+    await loadUsers()
+  } catch (e) { fail(e); await loadUsers() } finally { adminBusy.value = false }
 }
-async function openAdmin() {
-  showAdmin.value = true; issuedToken.value = ''; adminBusy.value = true
+async function loadUsers() {
+  adminBusy.value = true
   try { users.value = await api('/admin/users'); await loadTenants() } catch (e) { fail(e) } finally { adminBusy.value = false }
+}
+
+/** 进入管理控制台：管理员专用界面，交付知识库/用户/租户/审计。 */
+async function enterConsole(section = 'knowledge') {
+  if (!isAdmin.value) return
+  mode.value = 'console'; consoleSection.value = section
+  localStorage.setItem(MODE_KEY, 'console')
+  issuedToken.value = ''
+  if (section === 'users' || section === 'tenants') await loadUsers()
+  if (section === 'audit') await loadAudit()
+  if (section === 'knowledge') await loadKB()
+}
+
+function exitConsole() {
+  mode.value = 'workspace'
+  localStorage.setItem(MODE_KEY, 'workspace')
+}
+
+/** 从控制台进入某个知识库的问答。 */
+async function openKb(item) {
+  selected.value = item.id
+  exitConsole()
+  tab.value = 'chat'
+  await loadDocs().catch(fail)
+}
+
+/** 控制台内切到某个知识库的资料页（上传/审核/成员）。 */
+async function manageKb(item) {
+  selected.value = item.id
+  exitConsole()
+  tab.value = 'docs'
+  await loadDocs().catch(fail)
 }
 async function createUser() {
   if (!adminForm.value.email.trim()) return
@@ -389,7 +427,7 @@ async function createUser() {
     else payload.tenant_id = Number(payload.tenant_id)
     const data = await api('/admin/users', json(payload))
     adminForm.value = {email: '', display_name: '', role: 'viewer', tenant_id: ''}
-    await openAdmin()
+    await loadUsers()
     notice.value = `已创建用户 ${data.email}；需要登录凭证时请点击该行的“签发 Token”。`
   } catch (e) { fail(e) } finally { adminBusy.value = false }
 }
@@ -397,23 +435,23 @@ async function issueTokenFor(u) {
   adminBusy.value = true; error.value = ''
   try {
     const data = await api(`/admin/users/${u.id}/tokens`, {method: 'POST'})
-    issuedToken.value = data.token; await openAdmin()
+    issuedToken.value = data.token; await loadUsers()
     notice.value = `已为 ${u.email} 签发 Token，仅显示一次，请立即复制。`
   } catch (e) { fail(e) } finally { adminBusy.value = false }
 }
 async function setUserRole(u, role) {
   adminBusy.value = true; error.value = ''
-  try { await api(`/admin/users/${u.id}`, patch({role})); await openAdmin() } catch (e) { fail(e); await openAdmin() } finally { adminBusy.value = false }
+  try { await api(`/admin/users/${u.id}`, patch({role})); await loadUsers() } catch (e) { fail(e); await loadUsers() } finally { adminBusy.value = false }
 }
 async function toggleUserActive(u) {
   adminBusy.value = true; error.value = ''
-  try { await api(`/admin/users/${u.id}`, patch({is_active: !u.is_active})); await openAdmin() } catch (e) { fail(e); await openAdmin() } finally { adminBusy.value = false }
+  try { await api(`/admin/users/${u.id}`, patch({is_active: !u.is_active})); await loadUsers() } catch (e) { fail(e); await loadUsers() } finally { adminBusy.value = false }
 }
 async function revokeUserTokens(u) {
   adminBusy.value = true; error.value = ''
   try {
     const data = await api(`/admin/users/${u.id}/tokens`, {method: 'DELETE'})
-    await openAdmin(); notice.value = `已吊销 ${u.email} 的 ${data.revoked} 个 Token。`
+    await loadUsers(); notice.value = `已吊销 ${u.email} 的 ${data.revoked} 个 Token。`
   } catch (e) { fail(e) } finally { adminBusy.value = false }
 }
 
@@ -485,8 +523,8 @@ async function toggleKbReview() {
     notice.value = updated.review_required ? '已开启：本库新上传需审核通过后才可检索。' : '已关闭：本库上传即生效。'
   } catch (e) { fail(e) } finally { adminBusy.value = false }
 }
-async function openAudit() {
-  showAudit.value = true; adminBusy.value = true
+async function loadAudit() {
+  adminBusy.value = true
   const query = auditTenant.value === '' ? '' : `&tenant_id=${auditTenant.value}`
   try { auditLogs.value = await api(`/admin/audit-logs?limit=50${query}`) } catch (e) { fail(e) } finally { adminBusy.value = false }
 }
@@ -564,7 +602,7 @@ onUnmounted(() => clearInterval(timer))
     <header class="topbar">
       <a class="brand" href="/ui/"><span class="logo">K</span> KnowOps<span class="dot">.</span></a>
 
-      <div class="scope-switch">
+      <div v-if="mode==='workspace'" class="scope-switch">
         <button type="button" class="scope-button" :aria-expanded="showKbList" @click="showKbList=!showKbList">
           <span class="scope-icon">{{unified?'✳':'▤'}}</span>
           <span class="scope-text"><small>检索范围</small><b>{{unified?'全部知识库':(kb?.name||'选择知识库')}}</b></span>
@@ -586,13 +624,20 @@ onUnmounted(() => clearInterval(timer))
         </div>
       </div>
 
-      <nav class="topnav">
+      <nav v-if="mode==='workspace'" class="topnav">
         <button :class="{chosen:tab==='chat'}" @click="tab='chat'">知识问答</button>
-        <button v-if="!unified" :class="{chosen:tab==='docs'}" @click="tab='docs'">文档管理<span class="pill">{{docs.length}}</span></button>
+        <button v-if="!unified" :class="{chosen:tab==='docs'}" @click="tab='docs'">资料<span class="pill">{{docs.length}}</span></button>
+      </nav>
+      <nav v-else class="topnav">
+        <button :class="{chosen:consoleSection==='knowledge'}" @click="enterConsole('knowledge')">知识库</button>
+        <button :class="{chosen:consoleSection==='users'}" @click="enterConsole('users')">用户</button>
+        <button v-if="me.is_platform_admin" :class="{chosen:consoleSection==='tenants'}" @click="enterConsole('tenants')">租户</button>
+        <button :class="{chosen:consoleSection==='audit'}" @click="enterConsole('audit')">审计</button>
       </nav>
 
       <div class="topbar-right">
-        <button v-if="isAdmin" class="ghost" @click="openAdmin">用户管理</button>
+        <button v-if="isAdmin && mode==='workspace'" class="ghost strong" @click="enterConsole('knowledge')">管理控制台</button>
+        <button v-if="isAdmin && mode==='console'" class="ghost" @click="exitConsole()">← 返回问答</button>
         <a class="ghost" href="/docs" target="_blank" rel="noopener">接口文档 ↗</a>
         <div class="user-menu">
           <button type="button" class="avatar-button" :aria-expanded="showUserMenu" @click="showUserMenu=!showUserMenu">
@@ -610,7 +655,7 @@ onUnmounted(() => clearInterval(timer))
       </div>
     </header>
 
-    <main class="workspace">
+    <main v-if="mode==='workspace'" class="workspace">
       <div class="page-head">
         <div>
           <span class="eyebrow">WORKSPACE / KNOWLEDGE</span>
@@ -719,6 +764,151 @@ onUnmounted(() => clearInterval(timer))
       </section>
     </main>
 
+    <main v-else class="workspace wide">
+      <div class="page-head">
+        <div>
+          <span class="eyebrow">ADMIN CONSOLE</span>
+          <h1>{{({knowledge:'知识库管理',users:'用户管理',tenants:'租户管理',audit:'审计日志'})[consoleSection]}}</h1>
+          <p>{{({knowledge:'创建与维护知识库；进入某个知识库可上传资料、审核版本、分配成员。',users:'创建账号、调整角色与租户、签发或吊销 Token。',tenants:'平台级租户的新建与查看，所有数据按租户隔离。',audit:'谁在何时对哪个对象做了什么；可按租户筛选并导出 CSV。'})[consoleSection]}}</p>
+        </div>
+      </div>
+
+      <section v-if="consoleSection==='knowledge'" class="console">
+        <form class="console-card" @submit.prevent="create">
+          <h3>新建知识库</h3>
+          <p class="muted">按团队或主题整理资料。统一问答会检索你有权访问的全部知识库。</p>
+          <div class="inline-form">
+            <input v-model="name" required maxlength="128" placeholder="知识库名称，例如：IT 运维知识库" aria-label="知识库名称">
+            <input v-model="description" maxlength="512" placeholder="描述（可选）" aria-label="知识库描述">
+            <button class="primary" :disabled="creating||!name.trim()">{{creating?'创建中…':'创建知识库'}}</button>
+          </div>
+        </form>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>知识库</th><th>我的权限</th><th>上传需审核</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr v-for="item in kbs" :key="item.id">
+                <td>{{item.name}}<small v-if="item.description">{{item.description}}</small></td>
+                <td><span class="badge">{{item.my_role||'—'}}</span></td>
+                <td><span class="badge" :class="{ready:item.review_required}">{{item.review_required?'已开启':'未开启'}}</span></td>
+                <td class="row-actions">
+                  <button class="text-button" @click="openKb(item)">进入问答</button>
+                  <button class="text-button" @click="manageKb(item)">资料与上传</button>
+                  <button class="text-button" @click="selected=item.id; openMembers()">成员权限</button>
+                  <button class="text-button" @click="selected=item.id; openReviews()">待审版本</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="!kbs.length" class="empty">还没有知识库，先在上方创建一个。</div>
+        </div>
+      </section>
+
+      <section v-else-if="consoleSection==='users'" class="console">
+        <form class="console-card" @submit.prevent="createUser">
+          <h3>新建用户</h3>
+          <p class="muted">新用户默认没有口令：用 <code>scripts/manage_users.py set-password</code> 设置，或让用户走登录页的"忘记密码"流程。</p>
+          <div class="inline-form">
+            <input v-model="adminForm.email" type="email" required placeholder="邮箱" aria-label="用户邮箱">
+            <input v-model="adminForm.display_name" placeholder="显示名（可选）" aria-label="显示名">
+            <select v-model="adminForm.role" aria-label="全局角色"><option value="viewer">viewer · 只读</option><option value="editor">editor · 可编辑</option><option value="admin">admin · 管理员</option></select>
+            <select v-if="tenants.length" v-model="adminForm.tenant_id" aria-label="所属租户">
+              <option value="">所属租户：默认</option>
+              <option v-for="t in tenants" :key="t.id" :value="t.id">{{t.name}}</option>
+            </select>
+            <button class="primary" :disabled="adminBusy||!adminForm.email.trim()">创建用户</button>
+          </div>
+        </form>
+        <div v-if="issuedToken" class="token-callout">
+          <b>新 Token（仅显示一次）</b>
+          <code>{{issuedToken}}</code>
+          <small>请立即复制保存。数据库只保存摘要，关闭后无法再次查看。</small>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>用户</th><th>角色</th><th>租户</th><th>状态</th><th>有效 Token</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr v-for="u in users" :key="u.id">
+                <td>{{u.display_name || u.email}}<small v-if="u.display_name && u.display_name !== u.email">{{u.email}}</small></td>
+                <td>
+                  <select :value="u.role" :disabled="adminBusy" aria-label="调整角色" @change="setUserRole(u,$event.target.value)">
+                    <option value="viewer">viewer</option><option value="editor">editor</option><option value="admin">admin</option>
+                  </select>
+                </td>
+                <td>
+                  <select v-if="me?.is_platform_admin" :value="u.tenant_id ?? ''" :disabled="adminBusy" aria-label="调整租户" @change="setUserTenant(u,$event.target.value)">
+                    <option value="">平台级</option>
+                    <option v-for="t in tenants" :key="t.id" :value="t.id">{{t.name}}</option>
+                  </select>
+                  <span v-else class="badge">{{u.tenant_id ?? '—'}}</span>
+                </td>
+                <td><span class="badge" :class="{ready:u.is_active}">{{u.is_active?'启用':'停用'}}</span></td>
+                <td>{{u.active_tokens}}</td>
+                <td class="row-actions">
+                  <button class="text-button" :disabled="adminBusy" @click="issueTokenFor(u)">签发 Token</button>
+                  <button class="text-button" :disabled="adminBusy||!u.active_tokens" @click="revokeUserTokens(u)">吊销</button>
+                  <button class="text-button" :disabled="adminBusy" @click="toggleUserActive(u)">{{u.is_active?'停用':'启用'}}</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="!users.length" class="empty">正在加载用户…</div>
+        </div>
+      </section>
+
+      <section v-else-if="consoleSection==='tenants'" class="console">
+        <form class="console-card" @submit.prevent="createTenant">
+          <h3>新建租户</h3>
+          <p class="muted">租户之间的知识库、用户、审计完全隔离；租户管理员只能看到本租户数据。</p>
+          <div class="inline-form">
+            <input v-model="tenantForm.name" required placeholder="租户名称" aria-label="租户名称">
+            <input v-model="tenantForm.slug" required placeholder="租户标识（英文小写）" aria-label="租户标识">
+            <button class="primary" :disabled="adminBusy||!tenantForm.name.trim()||!tenantForm.slug.trim()">创建租户</button>
+          </div>
+        </form>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>租户</th><th>标识</th><th>用户数</th></tr></thead>
+            <tbody>
+              <tr v-for="t in tenants" :key="t.id">
+                <td>{{t.name}}</td>
+                <td><code>{{t.slug}}</code></td>
+                <td>{{users.filter(u => u.tenant_id === t.id).length}}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="!tenants.length" class="empty">当前只有默认租户。</div>
+        </div>
+      </section>
+
+      <section v-else class="console">
+        <div class="console-toolbar">
+          <select v-if="me?.is_platform_admin" v-model="auditTenant" aria-label="按租户筛选" @change="loadAudit">
+            <option value="">全部租户</option>
+            <option v-for="t in tenants" :key="t.id" :value="t.id">{{t.name}}</option>
+          </select>
+          <span class="muted">最近 50 条</span>
+          <a class="ghost" :href="auditTenant === '' ? '/api/v1/admin/audit-logs/export' : '/api/v1/admin/audit-logs/export?tenant_id='+auditTenant" target="_blank" rel="noopener">导出 CSV ↘</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>时间</th><th>操作者</th><th>租户</th><th>动作</th><th>对象</th><th>详情</th></tr></thead>
+            <tbody>
+              <tr v-for="a in auditLogs" :key="a.id">
+                <td>{{(a.created_at||'').replace('T',' ').slice(0,19)}}</td>
+                <td>{{a.actor_email || '本地管理员'}}</td>
+                <td>{{a.tenant_id ?? '平台级'}}</td>
+                <td><span class="badge">{{a.action}}</span></td>
+                <td>{{a.object_type}}{{a.object_id ? '#'+a.object_id : ''}}</td>
+                <td>{{a.detail}}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="!auditLogs.length" class="empty">还没有审计记录。</div>
+        </div>
+      </section>
+    </main>
+
     <footer>KnowOps <span>企业内部知识库问答平台</span><span>文档 → 检索 → 有据回答</span></footer>
   </template>
 
@@ -806,68 +996,6 @@ onUnmounted(() => clearInterval(timer))
     </section>
   </div>
 
-  <div v-if="showAdmin" class="overlay" @click.self="showAdmin=false">
-    <section role="dialog" aria-modal="true" aria-label="用户管理" class="modal wide">
-      <div class="modal-heading"><h2>用户管理</h2><button type="button" class="icon" @click="showAdmin=false" aria-label="关闭">×</button></div>
-      <p>管理员可创建用户、签发与吊销 Token、调整角色；Token 只在签发时显示一次。</p>
-      <div class="document-actions"><button v-if="isAdmin" type="button" class="ghost" @click="openAudit">查看审计日志</button></div>
-      <form class="inline-form" @submit.prevent="createUser">
-        <input v-model="adminForm.email" type="email" required placeholder="邮箱" aria-label="用户邮箱">
-        <input v-model="adminForm.display_name" placeholder="显示名（可选）" aria-label="显示名">
-        <select v-model="adminForm.role" aria-label="全局角色"><option value="viewer">viewer</option><option value="editor">editor</option><option value="admin">admin</option></select>
-        <select v-if="tenants.length" v-model="adminForm.tenant_id" aria-label="所属租户">
-          <option value="">所属租户：默认</option>
-          <option v-for="t in tenants" :key="t.id" :value="t.id">{{t.name}}</option>
-        </select>
-        <button class="primary" :disabled="adminBusy||!adminForm.email.trim()">创建用户</button>
-      </form>
-      <section v-if="me?.is_platform_admin" class="tenant-admin">
-        <h3>租户</h3>
-        <form class="inline-form" @submit.prevent="createTenant">
-          <input v-model="tenantForm.name" required placeholder="租户名称" aria-label="租户名称">
-          <input v-model="tenantForm.slug" required placeholder="租户标识（英文小写）" aria-label="租户标识">
-          <button class="primary" :disabled="adminBusy||!tenantForm.name.trim()||!tenantForm.slug.trim()">创建租户</button>
-        </form>
-        <p class="tenant-list">现有租户：<span v-for="t in tenants" :key="t.id" class="badge">{{t.name}}（{{t.slug}}）</span></p>
-      </section>
-      <div v-if="issuedToken" class="token-callout">
-        <b>新 Token（仅显示一次）</b>
-        <code>{{issuedToken}}</code>
-        <small>请立即复制保存。数据库只保存摘要，关闭后无法再次查看。</small>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>用户</th><th>角色</th><th>租户</th><th>状态</th><th>有效 Token</th><th>操作</th></tr></thead>
-          <tbody>
-            <tr v-for="u in users" :key="u.id">
-              <td>{{u.display_name || u.email}}<small v-if="u.display_name && u.display_name !== u.email">{{u.email}}</small></td>
-              <td>
-                <select :value="u.role" :disabled="adminBusy" aria-label="调整角色" @change="setUserRole(u,$event.target.value)">
-                  <option value="viewer">viewer</option><option value="editor">editor</option><option value="admin">admin</option>
-                </select>
-              </td>
-              <td>
-                <select v-if="me?.is_platform_admin" :value="u.tenant_id ?? ''" :disabled="adminBusy" aria-label="调整租户" @change="setUserTenant(u,$event.target.value)">
-                  <option value="">平台级</option>
-                  <option v-for="t in tenants" :key="t.id" :value="t.id">{{t.name}}</option>
-                </select>
-                <span v-else class="badge">{{u.tenant_id ?? '—'}}</span>
-              </td>
-              <td><span class="badge" :class="{ready:u.is_active}">{{u.is_active?'启用':'停用'}}</span></td>
-              <td>{{u.active_tokens}}</td>
-              <td class="row-actions">
-                <button class="text-button" :disabled="adminBusy" @click="issueTokenFor(u)">签发 Token</button>
-                <button class="text-button" :disabled="adminBusy||!u.active_tokens" @click="revokeUserTokens(u)">吊销</button>
-                <button class="text-button" :disabled="adminBusy" @click="toggleUserActive(u)">{{u.is_active?'停用':'启用'}}</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div v-if="!users.length" class="empty">正在加载用户…</div>
-      </div>
-    </section>
-  </div>
-
   <div v-if="showReviews" class="overlay" @click.self="showReviews=false">
     <section role="dialog" aria-modal="true" aria-label="待审版本" class="modal wide">
       <div class="modal-heading"><h2>待审版本 · {{kb?.name}}</h2><button type="button" class="icon" @click="showReviews=false" aria-label="关闭">×</button></div>
@@ -890,36 +1018,6 @@ onUnmounted(() => clearInterval(timer))
           </tbody>
         </table>
         <div v-if="!reviews.length" class="empty">当前没有待审版本。</div>
-      </div>
-    </section>
-  </div>
-
-  <div v-if="showAudit" class="overlay" @click.self="showAudit=false">
-    <section role="dialog" aria-modal="true" aria-label="审计日志" class="modal wide">
-      <div class="modal-heading"><h2>审计日志 · 最近 50 条</h2><button type="button" class="icon" @click="showAudit=false" aria-label="关闭">×</button></div>
-      <p>记录谁在何时对哪个对象做了什么；操作者身份以文本快照保存，用户改名或删除后仍可追溯。租户管理员只能看到本租户记录。</p>
-      <div class="document-actions">
-        <select v-if="me?.is_platform_admin" v-model="auditTenant" aria-label="按租户筛选" @change="openAudit">
-          <option value="">全部租户</option>
-          <option v-for="t in tenants" :key="t.id" :value="t.id">{{t.name}}</option>
-        </select>
-        <a class="ghost" :href="auditTenant === '' ? '/api/v1/admin/audit-logs/export' : '/api/v1/admin/audit-logs/export?tenant_id='+auditTenant" target="_blank" rel="noopener">导出 CSV ↘</a>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>时间</th><th>操作者</th><th>租户</th><th>动作</th><th>对象</th><th>详情</th></tr></thead>
-          <tbody>
-            <tr v-for="a in auditLogs" :key="a.id">
-              <td>{{(a.created_at||'').replace('T',' ').slice(0,19)}}</td>
-              <td>{{a.actor_email || '本地管理员'}}</td>
-              <td>{{a.tenant_id ?? '平台级'}}</td>
-              <td><span class="badge">{{a.action}}</span></td>
-              <td>{{a.object_type}}{{a.object_id ? '#'+a.object_id : ''}}</td>
-              <td>{{a.detail}}</td>
-            </tr>
-          </tbody>
-        </table>
-        <div v-if="!auditLogs.length" class="empty">还没有审计记录。</div>
       </div>
     </section>
   </div>
