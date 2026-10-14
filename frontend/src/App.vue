@@ -15,6 +15,8 @@ const me = ref(null), needsLogin = ref(false), loginToken = ref(''), loginError 
 const showAdmin = ref(false), users = ref([]), adminForm = ref({email: '', display_name: '', role: 'viewer'})
 const issuedToken = ref(''), adminBusy = ref(false)
 const showMembers = ref(false), members = ref([]), memberForm = ref({email: '', role: 'viewer'})
+const showReviews = ref(false), reviews = ref([]), reviewNote = ref('')
+const showAudit = ref(false), auditLogs = ref([])
 
 const unified = computed(() => selected.value === 'all')
 const kb = computed(() => kbs.value.find(k => k.id === selected.value))
@@ -206,6 +208,59 @@ async function removeMember(m) {
   try { await api(`/knowledge-bases/${selected.value}/members/${m.user_id}`, {method: 'DELETE'}); await openMembers(); await loadKB() } catch (e) { fail(e) } finally { adminBusy.value = false }
 }
 
+function publishLabel(d) {
+  if (d.retired_at) return '已下架'
+  if (d.review_status === 'pending') return '待审核'
+  if (d.review_status === 'rejected') return '已驳回'
+  return d.is_current ? '已发布' : '未发布'
+}
+async function uploadVersion(d, event) {
+  const file = event.target.files[0]
+  if (!file) return
+  error.value = ''; uploading.value = true
+  try {
+    const form = new FormData(); form.append('file', file)
+    const result = await api(`/documents/${d.id}/versions`, {method: 'POST', body: form})
+    notice.value = result.review_status === 'pending' ? `新版本 v${result.version} 已提交，审核通过后才参与检索。` : `新版本 v${result.version} 已上传并生效。`
+    await loadDocs()
+  } catch (e) { fail(e) } finally { uploading.value = false; event.target.value = '' }
+}
+async function retireDoc(d) {
+  adminBusy.value = true; error.value = ''
+  try {
+    await api(`/documents/${d.id}/retire`, {method: 'POST'})
+    notice.value = '文档已下架，不再参与检索；历史切片与向量仍保留。'
+    await loadDocs()
+  } catch (e) { fail(e) } finally { adminBusy.value = false }
+}
+async function openReviews() {
+  if (typeof selected.value !== 'number') return
+  showReviews.value = true; adminBusy.value = true
+  try { reviews.value = await api(`/knowledge-bases/${selected.value}/reviews`) } catch (e) { fail(e) } finally { adminBusy.value = false }
+}
+async function decideReview(v, decision) {
+  adminBusy.value = true; error.value = ''
+  try {
+    await api(`/document-versions/${v.version_id}/review`, json({decision, note: reviewNote.value}))
+    reviewNote.value = ''
+    await openReviews(); await loadDocs()
+    notice.value = decision === 'approve' ? '已通过审核并发布该版本。' : '已驳回该版本。'
+  } catch (e) { fail(e) } finally { adminBusy.value = false }
+}
+async function toggleKbReview() {
+  if (typeof selected.value !== 'number') return
+  adminBusy.value = true; error.value = ''
+  try {
+    const updated = await api(`/knowledge-bases/${selected.value}`, patch({review_required: !kb.value?.review_required}))
+    await loadKB()
+    notice.value = updated.review_required ? '已开启：本库新上传需审核通过后才可检索。' : '已关闭：本库上传即生效。'
+  } catch (e) { fail(e) } finally { adminBusy.value = false }
+}
+async function openAudit() {
+  showAudit.value = true; adminBusy.value = true
+  try { auditLogs.value = await api('/admin/audit-logs?limit=50') } catch (e) { fail(e) } finally { adminBusy.value = false }
+}
+
 onMounted(async () => {
   await bootstrap()
   timer = setInterval(() => {
@@ -302,6 +357,8 @@ onUnmounted(() => clearInterval(timer))
     <div class="document-heading">
       <div><h2>知识来源</h2><p>上传后自动解析与索引；状态每 5 秒刷新。</p></div>
       <div class="document-actions">
+        <label v-if="canWriteKb" class="policy-toggle"><input type="checkbox" :checked="!!kb?.review_required" :disabled="adminBusy" @change="toggleKbReview">上传需审核</label>
+        <button v-if="canWriteKb" class="api-link" @click="openReviews">待审版本</button>
         <button v-if="canWriteKb" class="api-link" @click="openMembers">成员权限</button>
         <label v-if="canUpload" class="primary upload" :class="{disabled:uploading}">{{uploading?'正在上传…':'＋ 上传文档'}}<input type="file" accept=".txt,.md,.pdf" :disabled="uploading" @change="upload"></label>
       </div>
@@ -309,17 +366,20 @@ onUnmounted(() => clearInterval(timer))
     <div class="file-hint">支持 UTF-8 TXT、Markdown 和文本 PDF · 每份不超过 10 MiB · 不支持扫描件 OCR<span v-if="!canUpload"> · 你对该知识库只有查看权限</span></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>文档名称</th><th>解析</th><th>索引</th><th>切片</th><th>操作</th></tr></thead>
+        <thead><tr><th>文档名称</th><th>解析</th><th>索引</th><th>切片</th><th>发布</th><th>操作</th></tr></thead>
         <tbody>
           <tr v-for="d in docs" :key="d.id">
             <td><span class="file-icon">▤</span>{{d.filename}}<small v-if="d.error||d.index_error" class="row-error">{{d.error||d.index_error}}</small></td>
             <td><span class="badge" :class="d.status">{{{pending:'待处理',parsed:'已解析',failed:'解析失败'}[d.status]||d.status}}</span></td>
             <td><span class="badge" :class="d.index_status">{{d.status!=='parsed'?'等待解析':({pending:'等待索引',indexed:'可检索',failed:'索引失败'}[d.index_status]||d.index_status)}}</span></td>
             <td>{{d.chunk_count}}</td>
-            <td>
+            <td><span class="badge" :class="{ready:!d.retired_at&&d.review_status==='approved'&&d.is_current}">{{publishLabel(d)}}</span><small v-if="d.version">v{{d.version}}</small></td>
+            <td class="row-actions">
               <button v-if="canWriteKb && (d.status!=='parsed'||d.index_status!=='indexed')" class="text-button" :disabled="action===d.id" @click="retry(d)">{{action===d.id?'投递中…':d.status==='parsed'?'重试索引':'重试解析'}}</button>
               <span v-else-if="d.status==='parsed'&&d.index_status==='indexed'" class="ready">✓ 就绪</span>
               <span v-else class="ready">等待处理</span>
+              <label v-if="canWriteKb" class="text-button">上传新版本<input type="file" accept=".txt,.md,.pdf" hidden @change="uploadVersion(d,$event)"></label>
+              <button v-if="canWriteKb && !d.retired_at" class="text-button" :disabled="adminBusy" @click="retireDoc(d)">下架</button>
             </td>
           </tr>
         </tbody>
@@ -366,6 +426,7 @@ onUnmounted(() => clearInterval(timer))
   <section role="dialog" aria-modal="true" aria-label="用户管理" class="modal wide">
     <div class="modal-heading"><h2>用户管理</h2><button type="button" class="icon" @click="showAdmin=false" aria-label="关闭">×</button></div>
     <p>管理员可创建用户、签发与吊销 Token、调整角色；Token 只在签发时显示一次。</p>
+    <div class="document-actions"><button type="button" class="api-link" @click="openAudit">查看审计日志</button></div>
     <form class="inline-form" @submit.prevent="createUser">
       <input v-model="adminForm.email" type="email" required placeholder="邮箱" aria-label="用户邮箱">
       <input v-model="adminForm.display_name" placeholder="显示名（可选）" aria-label="显示名">
@@ -399,6 +460,54 @@ onUnmounted(() => clearInterval(timer))
         </tbody>
       </table>
       <div v-if="!users.length" class="empty">正在加载用户…</div>
+    </div>
+  </section>
+</div>
+
+<div v-if="showReviews" class="overlay" @click.self="showReviews=false">
+  <section role="dialog" aria-modal="true" aria-label="待审版本" class="modal wide">
+    <div class="modal-heading"><h2>待审版本 · {{kb?.name}}</h2><button type="button" class="icon" @click="showReviews=false" aria-label="关闭">×</button></div>
+    <p>审核通过后该版本才会参与检索；提交人不能审核自己提交的版本。</p>
+    <label>审核备注（可选）<input v-model="reviewNote" maxlength="512" placeholder="例如：口径与现行制度一致"></label>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>文档</th><th>版本</th><th>解析</th><th>提交人 ID</th><th>操作</th></tr></thead>
+        <tbody>
+          <tr v-for="v in reviews" :key="v.version_id">
+            <td>{{v.filename}}</td>
+            <td>v{{v.version}}</td>
+            <td><span class="badge">{{v.status}}</span></td>
+            <td>{{v.uploaded_by ?? '—'}}</td>
+            <td class="row-actions">
+              <button class="text-button" :disabled="adminBusy" @click="decideReview(v,'approve')">通过并发布</button>
+              <button class="text-button" :disabled="adminBusy" @click="decideReview(v,'reject')">驳回</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-if="!reviews.length" class="empty">当前没有待审版本。</div>
+    </div>
+  </section>
+</div>
+
+<div v-if="showAudit" class="overlay" @click.self="showAudit=false">
+  <section role="dialog" aria-modal="true" aria-label="审计日志" class="modal wide">
+    <div class="modal-heading"><h2>审计日志 · 最近 50 条</h2><button type="button" class="icon" @click="showAudit=false" aria-label="关闭">×</button></div>
+    <p>记录谁在何时对哪个对象做了什么；操作者身份以文本快照保存，用户改名或删除后仍可追溯。</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>对象</th><th>详情</th></tr></thead>
+        <tbody>
+          <tr v-for="a in auditLogs" :key="a.id">
+            <td>{{(a.created_at||'').replace('T',' ').slice(0,19)}}</td>
+            <td>{{a.actor_email || '本地管理员'}}</td>
+            <td><span class="badge">{{a.action}}</span></td>
+            <td>{{a.object_type}}{{a.object_id ? '#'+a.object_id : ''}}</td>
+            <td>{{a.detail}}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-if="!auditLogs.length" class="empty">还没有审计记录。</div>
     </div>
   </section>
 </div>

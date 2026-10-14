@@ -35,6 +35,8 @@ def expand_neighbors(hits, db):
         .where(
             tuple_(Chunk.version_id, Chunk.position).in_(wanted),
             DocumentVersion.status == "parsed",
+            DocumentVersion.is_current.is_(True),
+            DocumentVersion.review_status == "approved",
             VectorIndex.collection == collection_name(),
             VectorIndex.status == "indexed",
         )

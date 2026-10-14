@@ -167,15 +167,17 @@ def kb_permission(db: Session, principal: Principal, kb_id: int) -> str | None:
     return "write" if member.role in WRITE_KB_ROLES else "read"
 
 
-def require_kb(db: Session, principal: Principal, kb_id: int, need: str = "read") -> None:
+def require_kb(db: Session, principal: Principal, kb_id: int, need: str = "read") -> KnowledgeBase:
     """404 when the knowledge base does not exist, 403 when access is missing."""
-    if db.get(KnowledgeBase, kb_id) is None:
+    kb = db.get(KnowledgeBase, kb_id)
+    if kb is None:
         raise HTTPException(404, "知识库不存在")
     granted = kb_permission(db, principal, kb_id)
     if granted is None:
         raise HTTPException(403, "无权访问该知识库")
     if need == "write" and granted != "write":
         raise HTTPException(403, "无权修改该知识库")
+    return kb
 
 
 def require_author(principal: Principal) -> None:

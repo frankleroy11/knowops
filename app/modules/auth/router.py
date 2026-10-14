@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.db.deps import DB
+from app.modules.audit import service as audit
 from app.modules.auth import service
 from app.modules.auth.deps import AdminPrincipal, CurrentPrincipal
 from app.modules.auth.models import User
@@ -99,6 +100,7 @@ def list_users(db: DB, principal: AdminPrincipal):
 def create_user(body: UserCreate, db: DB, principal: AdminPrincipal):
     user = service.create_user(db, body.email, body.role, body.display_name)
     raw = service.issue_token(db, user, "admin-api") if body.issue_token else None
+    audit.record(db, principal, "user.create", "user", user.id, f"role={user.role} token={bool(raw)}")
     return UserCreated(**user_out(db, user).model_dump(), token=raw)
 
 
@@ -110,20 +112,26 @@ def patch_user(user_id: int, body: UserPatch, db: DB, principal: AdminPrincipal)
     )
     if demoting_self:
         raise HTTPException(409, "不能降低或停用当前登录的管理员自己")
+    changes = []
     if body.role is not None:
-        service.set_user_role(db, user, body.role)
+        changes.append(f"role={service.set_user_role(db, user, body.role).role}")
     if body.is_active is not None:
-        service.set_user_active(db, user, body.is_active)
+        changes.append(f"is_active={service.set_user_active(db, user, body.is_active).is_active}")
+    audit.record(db, principal, "user.update", "user", user.id, " ".join(changes) or "no-change")
     return user_out(db, user)
 
 
 @router.post("/admin/users/{user_id}/tokens", response_model=TokenOut, status_code=201)
 def issue_token(user_id: int, db: DB, principal: AdminPrincipal, label: str = ""):
     user = get_user(db, user_id)
-    return TokenOut(user_id=user.id, token=service.issue_token(db, user, label), label=label)
+    raw = service.issue_token(db, user, label)
+    audit.record(db, principal, "token.issue", "user", user.id, f"label={label}"[:512])
+    return TokenOut(user_id=user.id, token=raw, label=label)
 
 
 @router.delete("/admin/users/{user_id}/tokens")
 def revoke_tokens(user_id: int, db: DB, principal: AdminPrincipal):
     user = get_user(db, user_id)
-    return {"user_id": user.id, "revoked": service.revoke_tokens(db, user)}
+    revoked = service.revoke_tokens(db, user)
+    audit.record(db, principal, "token.revoke", "user", user.id, f"revoked={revoked}")
+    return {"user_id": user.id, "revoked": revoked}

@@ -11,9 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.core.config import ROOT
 from app.db.deps import DB, get_db  # noqa: F401 - re-exported for existing imports
+from app.modules.audit import service as audit
 from app.modules.auth import service
 from app.modules.auth.deps import CurrentPrincipal
 from app.modules.auth.principal import Principal
+from app.modules.knowledge import review
 from app.modules.knowledge.models import Chunk, Document, DocumentVersion, KnowledgeBase
 from app.workers.celery_app import ingest_document
 
@@ -25,6 +27,17 @@ KB_MEMBER_ROLES = ("owner", "editor", "viewer")
 class KBCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     description: str = Field(default="", max_length=512)
+    review_required: bool = False
+
+
+class KBUpdate(BaseModel):
+    description: str | None = Field(default=None, max_length=512)
+    review_required: bool | None = None
+
+
+class ReviewIn(BaseModel):
+    decision: Literal["approve", "reject"]
+    note: str = Field(default="", max_length=512)
 
 
 class KBOut(KBCreate):
@@ -50,7 +63,12 @@ def create_kb(body: KBCreate, db: DB, principal: CurrentPrincipal):
     if not body.name.strip():
         raise HTTPException(422, "名称不能为空")
     service.require_author(principal)
-    kb = KnowledgeBase(name=body.name.strip(), description=body.description, owner_id=principal.id)
+    kb = KnowledgeBase(
+        name=body.name.strip(),
+        description=body.description,
+        owner_id=principal.id,
+        review_required=body.review_required,
+    )
     db.add(kb)
     try:
         db.commit()
@@ -59,11 +77,45 @@ def create_kb(body: KBCreate, db: DB, principal: CurrentPrincipal):
         raise HTTPException(409, "知识库名称已存在") from exc
     if principal.id is not None:
         service.ensure_membership(db, kb.id, principal.id, "owner")
+    audit.record(
+        db,
+        principal,
+        "kb.create",
+        "knowledge_base",
+        kb.id,
+        f"name={kb.name} review_required={kb.review_required}",
+    )
     return {
         "id": kb.id,
         "name": kb.name,
         "description": kb.description,
+        "review_required": kb.review_required,
         "my_role": "admin" if principal.is_admin else ("owner" if principal.id else None),
+    }
+
+
+@router.patch("/knowledge-bases/{kb_id}", response_model=KBOut)
+def update_kb(kb_id: int, body: KBUpdate, db: DB, principal: CurrentPrincipal):
+    kb = service.require_kb(db, principal, kb_id, "write")
+    if body.description is not None:
+        kb.description = body.description
+    if body.review_required is not None:
+        kb.review_required = body.review_required
+    db.commit()
+    audit.record(
+        db,
+        principal,
+        "kb.update",
+        "knowledge_base",
+        kb.id,
+        f"review_required={kb.review_required}",
+    )
+    return {
+        "id": kb.id,
+        "name": kb.name,
+        "description": kb.description,
+        "review_required": kb.review_required,
+        "my_role": service.kb_role(db, principal, kb.id),
     }
 
 
@@ -78,6 +130,7 @@ def list_kbs(db: DB, principal: CurrentPrincipal, limit: int = 50, offset: int =
             "id": kb.id,
             "name": kb.name,
             "description": kb.description,
+            "review_required": kb.review_required,
             "my_role": "admin" if principal.is_admin else roles.get(kb.id),
         }
         for kb in db.scalars(
@@ -98,9 +151,8 @@ def dispatch(version):
         return {"queued": False, "task_id": None}
 
 
-@router.post("/knowledge-bases/{kb_id}/documents", status_code=202)
-def upload(kb_id: int, file: UploadFile, db: DB, principal: CurrentPrincipal):
-    service.require_kb(db, principal, kb_id, "write")
+def store_upload(file: UploadFile) -> tuple[str, str, str]:
+    """Persist one uploaded file; returns (filename, stored_name, sha256)."""
     name = (file.filename or "").replace("\\", "/").split("/")[-1]
     suffix = Path(name).suffix.lower()
     if suffix not in {".txt", ".md", ".pdf"}:
@@ -123,21 +175,104 @@ def upload(kb_id: int, file: UploadFile, db: DB, principal: CurrentPrincipal):
                 output.write(data)
         if total == 0:
             raise HTTPException(422, "文件为空")
-        doc = Document(knowledge_base_id=kb_id, filename=name, uploaded_by=principal.id)
-        db.add(doc)
-        db.flush()
-        version = DocumentVersion(
-            document_id=doc.id, version=1, content_hash=digest.hexdigest(), storage_path=target.name
-        )
-        db.add(version)
-        db.commit()
         committed = True
     finally:
         file.file.close()
         if not committed:
             target.unlink(missing_ok=True)
+    return name, target.name, digest.hexdigest()
+
+
+@router.post("/knowledge-bases/{kb_id}/documents", status_code=202)
+def upload(kb_id: int, file: UploadFile, db: DB, principal: CurrentPrincipal):
+    kb = service.require_kb(db, principal, kb_id, "write")
+    name, storage_name, content_hash = store_upload(file)
+    doc = Document(knowledge_base_id=kb_id, filename=name, uploaded_by=principal.id)
+    db.add(doc)
+    db.flush()
+    version = DocumentVersion(
+        document_id=doc.id,
+        version=1,
+        content_hash=content_hash,
+        storage_path=storage_name,
+        uploaded_by=principal.id,
+    )
+    db.add(version)
+    db.commit()
+    status = review.apply_initial_status(db, principal, kb, doc, version)
+    audit.record(
+        db,
+        principal,
+        "document.upload",
+        "document",
+        doc.id,
+        f"kb={kb_id} filename={name} review={status}",
+    )
     queue = dispatch(version)
-    return {"document_id": doc.id, "version_id": version.id, "status": "pending", **queue}
+    return {
+        "document_id": doc.id,
+        "version_id": version.id,
+        "status": "pending",
+        "review_status": status,
+        "is_current": version.is_current,
+        **queue,
+    }
+
+
+@router.post("/documents/{document_id}/versions", status_code=202)
+def upload_version(document_id: int, file: UploadFile, db: DB, principal: CurrentPrincipal):
+    """New version of an existing document; the old version stays live until publish."""
+    doc = db.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(404, "文档不存在")
+    kb = service.require_kb(db, principal, doc.knowledge_base_id, "write")
+    name, storage_name, content_hash = store_upload(file)
+    latest = (
+        db.scalar(select(func.max(DocumentVersion.version)).where(DocumentVersion.document_id == doc.id))
+        or 0
+    )
+    version = DocumentVersion(
+        document_id=doc.id,
+        version=latest + 1,
+        content_hash=content_hash,
+        storage_path=storage_name,
+        uploaded_by=principal.id,
+    )
+    db.add(version)
+    db.commit()
+    status = review.apply_initial_status(db, principal, kb, doc, version)
+    audit.record(
+        db,
+        principal,
+        "document.version.upload",
+        "document",
+        doc.id,
+        f"version={version.version} filename={name} review={status}",
+    )
+    queue = dispatch(version)
+    return {
+        "document_id": doc.id,
+        "version_id": version.id,
+        "version": version.version,
+        "status": "pending",
+        "review_status": status,
+        "is_current": version.is_current,
+        **queue,
+    }
+
+
+@router.post("/documents/{document_id}/retire")
+def retire_document(document_id: int, db: DB, principal: CurrentPrincipal):
+    """Take a document out of retrieval without deleting its chunks or vectors."""
+    doc = db.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(404, "文档不存在")
+    service.require_kb(db, principal, doc.knowledge_base_id, "write")
+    review.retire(db, principal, doc)
+    return {
+        "document_id": doc.id,
+        "retired_at": doc.retired_at.isoformat() if doc.retired_at else None,
+    }
 
 
 @router.get("/documents/{document_id}")
@@ -162,6 +297,9 @@ def detail(document_id: int, db: DB, principal: CurrentPrincipal):
         "status": version.status,
         "error": version.error,
         "chunk_count": count,
+        "review_status": version.review_status,
+        "is_current": version.is_current,
+        "retired_at": doc.retired_at.isoformat() if doc.retired_at else None,
     }
 
 
@@ -248,11 +386,15 @@ def documents(
             "id": d.id,
             "filename": d.filename,
             "version_id": v.id,
+            "version": v.version,
             "status": v.status,
             "error": v.error,
             "chunk_count": count or 0,
             "index_status": index.status if index else "pending",
             "index_error": index.error if index else None,
+            "review_status": v.review_status,
+            "is_current": v.is_current,
+            "retired_at": d.retired_at.isoformat() if d.retired_at else None,
         }
         for d, v, index, count in rows
     ]
@@ -282,6 +424,14 @@ def add_kb_member(kb_id: int, body: MemberIn, db: DB, principal: CurrentPrincipa
     if body.role == "owner" and kb.owner_id is None:
         kb.owner_id = user.id
         db.commit()
+    audit.record(
+        db,
+        principal,
+        "kb.member.grant",
+        "knowledge_base",
+        kb_id,
+        f"user={user.email} role={body.role}",
+    )
     return {
         "user_id": user.id,
         "email": user.email,
@@ -294,4 +444,30 @@ def add_kb_member(kb_id: int, body: MemberIn, db: DB, principal: CurrentPrincipa
 def remove_kb_member(kb_id: int, user_id: int, db: DB, principal: CurrentPrincipal):
     service.require_kb(db, principal, kb_id, "write")
     service.remove_membership(db, kb_id, user_id)
+    audit.record(db, principal, "kb.member.revoke", "knowledge_base", kb_id, f"user_id={user_id}")
     return Response(status_code=204)
+
+
+@router.get("/knowledge-bases/{kb_id}/reviews")
+def list_reviews(kb_id: int, db: DB, principal: CurrentPrincipal):
+    service.require_kb(db, principal, kb_id, "write")
+    return review.pending_versions(db, kb_id)
+
+
+@router.post("/document-versions/{version_id}/review")
+def review_version(
+    version_id: int, body: ReviewIn, db: DB, principal: CurrentPrincipal
+):
+    version = review.load_version(db, version_id)
+    document = review.document_of(db, version)
+    service.require_kb(db, principal, document.knowledge_base_id, "write")
+    if body.decision == "approve":
+        review.approve(db, principal, version, body.note)
+    else:
+        review.reject(db, principal, version, body.note)
+    return {
+        "version_id": version.id,
+        "document_id": document.id,
+        "review_status": version.review_status,
+        "is_current": version.is_current,
+    }

@@ -20,3 +20,6 @@
 .table-wrap td small{display:block;color:#8b998e;font-size:10px}
 .badge.ready{background:#e4f0e6;color:#4f7a58}
 .side-bottom .text-button{margin-top:8px;display:block}
+.policy-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:#647b6e;border:1px solid #dbe4de;border-radius:7px;padding:8px 12px}
+.policy-toggle input{accent-color:#234f43}
+label.text-button{cursor:pointer;color:#577965;font-size:11px;white-space:nowrap}

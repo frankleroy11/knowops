@@ -132,6 +132,8 @@ def search(body: Query, db: Session, principal: Principal | None = None):
                     Chunk.id == hit["chunk_id"],
                     Document.knowledge_base_id.in_(kb_ids),
                     DocumentVersion.status == "parsed",
+                    DocumentVersion.is_current.is_(True),
+                    DocumentVersion.review_status == "approved",
                     VectorIndex.collection == collection_name(),
                     VectorIndex.status == "indexed",
                 )

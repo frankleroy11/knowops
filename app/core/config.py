@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     embedding_max_length: int = Field(default=1024, ge=1, le=8192)
     # 本地模型目录（可选）。为空时按 embedding_model 交给 sentence-transformers 解析
     embedding_model_path: str = ""
+    # 权重已缓存且机器离线时置 1：禁止联网做 HEAD 检查，避免加载卡住数分钟
+    embedding_offline: bool = False
 
     # --- Milvus 索引 ---
     milvus_collection_prefix: str = "knowops_chunks"

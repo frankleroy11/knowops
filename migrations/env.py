@@ -1,6 +1,7 @@
 from alembic import context
 
 from app.db.session import Base, engine
+from app.modules.audit import models as audit_models  # noqa: F401
 from app.modules.auth import models as auth_models  # noqa: F401
 from app.modules.knowledge.models import KnowledgeBase  # noqa: F401
 
