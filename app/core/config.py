@@ -26,6 +26,20 @@ class Settings(BaseSettings):
     # enforced = 必须携带 Authorization: Bearer <token>，否则 401
     auth_mode: str = "off"
 
+    # --- OIDC 单点登录（可选）---
+    oidc_enabled: bool = False
+    oidc_issuer: str = ""
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_redirect_uri: str = ""
+    oidc_scopes: str = "openid email profile"
+    # 首次通过 SSO 登录时自动开通的本地账号属性
+    oidc_default_role: str = "viewer"
+    oidc_default_tenant_slug: str = "default"
+    oidc_clock_skew: int = Field(default=60, ge=0, le=600)
+    # 浏览器完成回调后跳回的前端地址
+    oidc_web_redirect: str = "/ui/"
+
     # --- Embedding 适配器 ---
     # provider: bge_m3 = 真实本地模型；hash = 无模型依赖的确定性假向量，仅用于测试与离线开发
     embedder_provider: str = "bge_m3"

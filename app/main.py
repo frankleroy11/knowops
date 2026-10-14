@@ -42,6 +42,10 @@ from app.modules.tenant.router import router as tenant_router
 
 app.include_router(tenant_router, prefix="/api/v1")
 
+from app.modules.oidc.router import router as oidc_router
+
+app.include_router(oidc_router, prefix="/api/v1")
+
 
 from fastapi.staticfiles import StaticFiles
 

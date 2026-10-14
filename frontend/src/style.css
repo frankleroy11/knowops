@@ -23,3 +23,4 @@
 .policy-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:#647b6e;border:1px solid #dbe4de;border-radius:7px;padding:8px 12px}
 .policy-toggle input{accent-color:#234f43}
 label.text-button{cursor:pointer;color:#577965;font-size:11px;white-space:nowrap}
+.sso-button{display:block;width:100%;text-align:center;margin:8px 0 14px;padding:11px 14px}

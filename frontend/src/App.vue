@@ -10,7 +10,7 @@ const question = ref(''), messages = ref([]), error = ref(''), notice = ref('')
 const page = ref(0), loading = ref(false), action = ref(null)
 
 const token = ref(localStorage.getItem(TOKEN_KEY) || '')
-const me = ref(null), needsLogin = ref(false), loginToken = ref(''), loginError = ref(''), busyLogin = ref(false)
+const me = ref(null), needsLogin = ref(false), loginToken = ref(''), loginError = ref(''), busyLogin = ref(false), ssoEnabled = ref(false)
 
 const showAdmin = ref(false), users = ref([]), adminForm = ref({email: '', display_name: '', role: 'viewer'})
 const issuedToken = ref(''), adminBusy = ref(false)
@@ -139,8 +139,20 @@ function signOut() {
   kbs.value = []; docs.value = []; messages.value = []; users.value = []; members.value = []
   showAdmin.value = false; showMembers.value = false; selected.value = 'all'; needsLogin.value = true
 }
+async function loadSsoStatus() {
+  try {
+    const response = await fetch('/api/v1/auth/oidc/status')
+    if (response.ok) ssoEnabled.value = !!(await response.json()).enabled
+  } catch (e) {
+    ssoEnabled.value = false
+  }
+}
+function ssoLogin() {
+  location.href = '/api/v1/auth/oidc/start'
+}
 async function bootstrap() {
   loading.value = true
+  await loadSsoStatus()
   try {
     me.value = await api('/auth/me')
     needsLogin.value = false
@@ -515,7 +527,8 @@ onUnmounted(() => clearInterval(timer))
 <div v-if="needsLogin" class="overlay">
   <form role="dialog" aria-modal="true" aria-label="登录" class="modal" @submit.prevent="signIn">
     <div class="modal-heading"><h2>登录 KnowOps</h2></div>
-    <p>粘贴管理员签发的 API Token。Token 可在「用户管理」中签发，或在服务器上用 <code>scripts/manage_users.py</code> 生成。</p>
+    <p>粘贴管理员签发的 API Token，或使用企业账号单点登录。Token 可在「用户管理」中签发，或在服务器上用 <code>scripts/manage_users.py</code> 生成。</p>
+    <button v-if="ssoEnabled" type="button" class="api-link sso-button" @click="ssoLogin">使用企业 SSO 登录 →</button>
     <label>API Token<input v-model="loginToken" type="password" autocomplete="off" placeholder="knp_…" aria-label="API Token"></label>
     <div v-if="loginError" class="alert error">{{loginError}}</div>
     <button class="primary" :disabled="busyLogin">{{busyLogin?'验证中…':'登录'}}</button>

@@ -17,6 +17,7 @@ KB_ROLES = ("owner", "editor", "viewer")
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("oidc_issuer", "oidc_subject"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True)
     display_name: Mapped[str] = mapped_column(String(128), default="")
@@ -25,6 +26,9 @@ class User(Base):
     tenant_id: Mapped[int | None] = mapped_column(
         ForeignKey("tenants.id"), nullable=True, index=True
     )
+    # Bound OIDC identity; NULL for local accounts.
+    oidc_issuer: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    oidc_subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
