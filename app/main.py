@@ -46,6 +46,10 @@ from app.modules.oidc.router import router as oidc_router
 
 app.include_router(oidc_router, prefix="/api/v1")
 
+from app.modules.feedback.router import router as feedback_router
+
+app.include_router(feedback_router, prefix="/api/v1")
+
 
 from fastapi.staticfiles import StaticFiles
 

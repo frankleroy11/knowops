@@ -30,3 +30,5 @@ label.text-button{cursor:pointer;color:#577965;font-size:11px;white-space:nowrap
 .tenant-admin{margin-top:18px;border-top:1px solid #e6ece7;padding-top:14px}
 .tenant-admin h3{font-size:13px;color:#3d5a4c;margin:0 0 6px}
 .tenant-list{font-size:11px;color:#6b8571;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.feedback{display:flex;gap:12px;align-items:center;margin-top:10px}
+.feedback button{font-size:11px;color:#577965;background:transparent}

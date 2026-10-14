@@ -118,10 +118,28 @@ async function ask() {
   question.value = ''; messages.value.push({role: 'user', text}); asking.value = true; error.value = ''
   try {
     const result = await api('/chat/ask', json({question: text, ...(id === 'all' ? {scope: 'all'} : {knowledge_base_id: id}), top_k: 3, expand_context: expandContext.value}))
-    if (g === generation) messages.value.push({role: 'assistant', text: result.answer, citations: result.citations, claims: result.claims, answerable: result.answerable})
+    if (g === generation) messages.value.push({role: 'assistant', text: result.answer, citations: result.citations, claims: result.claims, answerable: result.answerable, grounding_status: result.grounding_status})
   } catch (e) {
     if (g === generation) { question.value = text; fail(e) }
   } finally { asking.value = false }
+}
+/** 线上反馈：把用户评价连同 grounding_status 一起回传，补齐评测闭环的线上部分。 */
+async function sendFeedback(m, index, rating) {
+  const question = messages.value[index - 1]?.text || ''
+  if (!question || m.feedback) return
+  try {
+    const payload = {
+      rating,
+      question,
+      answer: m.text || '',
+      grounding_status: m.grounding_status || '',
+      citation_count: (m.citations || []).length
+    }
+    if (unified.value) payload.scope = 'all'
+    else { payload.scope = 'knowledge_base'; payload.knowledge_base_id = selected.value }
+    await api('/feedback', json(payload))
+    m.feedback = rating
+  } catch (e) { fail(e) }
 }
 async function changePage(delta) { page.value += delta; await loadDocs().catch(fail) }
 
@@ -412,6 +430,13 @@ onUnmounted(() => clearInterval(timer))
               <template v-for="(claim,j) in m.claims" :key="j"><blockquote v-for="(e,k) in claim.evidence.filter(e=>e.source_id===c.source_id)" :key="k">{{e.quote}}</blockquote></template>
               <p>{{c.content}}</p>
             </details>
+          </div>
+          <div v-if="m.role==='assistant'" class="feedback">
+            <template v-if="!m.feedback">
+              <button type="button" class="text-button" @click="sendFeedback(m,i,'helpful')">👍 有帮助</button>
+              <button type="button" class="text-button" @click="sendFeedback(m,i,'not_helpful')">👎 没帮助</button>
+            </template>
+            <span v-else class="ready">已记录反馈，谢谢</span>
           </div>
         </div>
       </article>
