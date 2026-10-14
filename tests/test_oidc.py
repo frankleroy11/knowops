@@ -23,6 +23,7 @@ from app.modules.auth import service as auth_service
 from app.modules.auth.models import User
 from app.modules.oidc import service as oidc_service
 from app.modules.oidc import tokens as oidc_tokens
+from app.modules.oidc.client import reset_jwks_cache
 from app.modules.oidc.models import OidcLoginState
 from app.modules.tenant.models import Tenant
 
@@ -80,6 +81,7 @@ def make_id_token(
     nonce=None,
     expires_in=300,
     kid="primary",
+    groups=None,
 ):
     header = {"alg": "RS256", "typ": "JWT", "kid": kid}
     now = datetime.now(UTC)
@@ -95,6 +97,8 @@ def make_id_token(
     }
     if nonce is not None:
         payload["nonce"] = nonce
+    if groups is not None:
+        payload["groups"] = groups
     signing_input = f"{b64url(json.dumps(header).encode())}.{b64url(json.dumps(payload).encode())}"
     signature = key.sign(signing_input.encode("ascii"), padding.PKCS1v15(), hashes.SHA256())
     return f"{signing_input}.{b64url(signature)}"
@@ -116,7 +120,8 @@ def make_provider(signing_key, other_key, state_nonce: dict):
                 },
             )
         if url.endswith("/jwks"):
-            return httpx.Response(200, json=jwks_for(signing_key))
+            state_nonce["jwks_hits"] = state_nonce.get("jwks_hits", 0) + 1
+            return httpx.Response(200, json=jwks_for(signing_key, state_nonce.get("kid", "primary")))
         if url.endswith("/token"):
             form = parse_qs(request.content.decode())
             if form.get("code") != ["good-code"]:
@@ -133,6 +138,8 @@ def make_provider(signing_key, other_key, state_nonce: dict):
                 email=state_nonce.get("email", "sso@corp"),
                 subject=state_nonce.get("subject", "user-1"),
                 expires_in=state_nonce.get("expires_in", 300),
+                kid=state_nonce.get("kid", "primary"),
+                groups=state_nonce.get("groups"),
             )
             return httpx.Response(200, json={"id_token": token, "token_type": "Bearer"})
         return httpx.Response(404)
@@ -173,7 +180,15 @@ def client(db_factory):
 
 @pytest.fixture
 def provider(signing_key, other_key):
-    state = {"nonce": None, "bad_signature": False, "bad_nonce": False}
+    state = {
+        "nonce": None,
+        "bad_signature": False,
+        "bad_nonce": False,
+        "kid": "primary",
+        "groups": None,
+        "jwks_hits": 0,
+    }
+    reset_jwks_cache()
     handler = make_provider(signing_key, other_key, state)
     original = httpx.Client
     with (
@@ -364,3 +379,96 @@ def test_token_module_requires_nonce_and_audience(signing_key):
         oidc_tokens.verify_id_token(token, jwks_for(signing_key), ISSUER, CLIENT_ID, nonce="n1").email
         == "sso@corp"
     )
+
+
+def test_jwks_is_cached_across_logins(client, provider):
+    for _ in range(2):
+        state, nonce = begin_login(client)
+        provider["nonce"] = nonce
+        assert client.get(f"/api/v1/auth/oidc/callback?code=good-code&state={state}").status_code == 200
+    assert provider["jwks_hits"] == 1
+
+
+def test_zero_ttl_disables_the_cache(client, provider):
+    settings = SETTINGS.model_copy(update={"oidc_jwks_ttl_seconds": 0})
+    with (
+        patch.object(oidc_service, "get_settings", return_value=settings),
+        patch("app.modules.oidc.client.get_settings", return_value=settings),
+    ):
+        for _ in range(2):
+            state, nonce = begin_login(client)
+            provider["nonce"] = nonce
+            assert client.get(f"/api/v1/auth/oidc/callback?code=good-code&state={state}").status_code == 200
+    assert provider["jwks_hits"] == 2
+
+
+def test_rotated_kid_triggers_exactly_one_refresh(client, provider):
+    state, nonce = begin_login(client)
+    provider["nonce"] = nonce
+    assert client.get(f"/api/v1/auth/oidc/callback?code=good-code&state={state}").status_code == 200
+    assert provider["jwks_hits"] == 1
+
+    # The provider rotates its key id; the cached JWKS no longer matches.
+    provider["kid"] = "rotated"
+    state, nonce = begin_login(client)
+    provider["nonce"] = nonce
+    response = client.get(f"/api/v1/auth/oidc/callback?code=good-code&state={state}")
+    assert response.status_code == 200
+    assert provider["jwks_hits"] == 2
+
+
+def test_group_claim_maps_to_local_role(client, provider):
+    settings = SETTINGS.model_copy(update={"oidc_role_map": '{"knowops-admins": "admin"}'})
+    provider["groups"] = ["knowops-admins"]
+    with (
+        patch.object(oidc_service, "get_settings", return_value=settings),
+        patch("app.modules.oidc.client.get_settings", return_value=settings),
+    ):
+        state, nonce = begin_login(client)
+        provider["nonce"] = nonce
+        body = client.get(f"/api/v1/auth/oidc/callback?code=good-code&state={state}").json()
+    assert body["user"]["role"] == "admin"
+
+
+def test_unmapped_or_invalid_mapping_falls_back_to_default(client, provider):
+    for role_map in ('{"other-group": "admin"}', "not-json", '{"knowops-admins": "root"}'):
+        settings = SETTINGS.model_copy(update={"oidc_role_map": role_map})
+        provider["groups"] = ["knowops-admins"]
+        with (
+            patch.object(oidc_service, "get_settings", return_value=settings),
+            patch("app.modules.oidc.client.get_settings", return_value=settings),
+        ):
+            state, nonce = begin_login(client)
+            provider["nonce"] = nonce
+            body = client.get(f"/api/v1/auth/oidc/callback?code=good-code&state={state}").json()
+        assert body["user"]["role"] == "viewer", role_map
+        reset_jwks_cache()
+
+
+def test_existing_account_role_sync_is_opt_in(client, provider, db_factory):
+    with db_factory.begin() as db:
+        db.add(User(id=11, email="sso@corp", display_name="既有", role="admin", tenant_id=1))
+    role_map = '{"kb-editors": "editor"}'
+    provider["groups"] = ["kb-editors"]
+
+    quiet = SETTINGS.model_copy(update={"oidc_role_map": role_map, "oidc_role_sync": False})
+    with (
+        patch.object(oidc_service, "get_settings", return_value=quiet),
+        patch("app.modules.oidc.client.get_settings", return_value=quiet),
+    ):
+        state, nonce = begin_login(client)
+        provider["nonce"] = nonce
+        first = client.get(f"/api/v1/auth/oidc/callback?code=good-code&state={state}").json()
+    assert first["user"]["role"] == "admin"
+
+    syncing = SETTINGS.model_copy(update={"oidc_role_map": role_map, "oidc_role_sync": True})
+    with (
+        patch.object(oidc_service, "get_settings", return_value=syncing),
+        patch("app.modules.oidc.client.get_settings", return_value=syncing),
+    ):
+        state, nonce = begin_login(client)
+        provider["nonce"] = nonce
+        second = client.get(f"/api/v1/auth/oidc/callback?code=good-code&state={state}").json()
+    assert second["user"]["role"] == "editor"
+    with db_factory() as db:
+        assert "user.oidc.role" in [row.action for row in db.scalars(select(AuditLog))]

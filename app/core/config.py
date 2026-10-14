@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     oidc_default_role: str = "viewer"
     oidc_default_tenant_slug: str = "default"
     oidc_clock_skew: int = Field(default=60, ge=0, le=600)
+    # JWKS 本地缓存秒数；kid 轮换时会在验签失败后强制刷新一次
+    oidc_jwks_ttl_seconds: int = Field(default=600, ge=0, le=86400)
+    # 从哪个声明读取用户组，以及组到本地角色的 JSON 映射
+    oidc_role_claim: str = "groups"
+    oidc_role_map: str = ""
+    # 是否在每次登录按映射同步既有账号的角色（默认只影响新开通账号）
+    oidc_role_sync: bool = False
     # 浏览器完成回调后跳回的前端地址
     oidc_web_redirect: str = "/ui/"
 

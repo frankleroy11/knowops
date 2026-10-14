@@ -26,6 +26,10 @@ class TokenError(ValueError):
     """Raised for any ID token that must not be trusted."""
 
 
+class UnknownKeyError(TokenError):
+    """The token names a `kid` we do not have yet: the caller may refresh JWKS."""
+
+
 @dataclass(frozen=True)
 class IdTokenClaims:
     subject: str
@@ -69,10 +73,10 @@ def select_jwk(jwks: dict, kid: str | None) -> dict:
         for key in keys:
             if key.get("kid") == kid:
                 return key
-        raise TokenError("找不到匹配的签名密钥")
+        raise UnknownKeyError("找不到匹配的签名密钥")
     if len(keys) == 1:
         return keys[0]
-    raise TokenError("无法确定签名密钥")
+    raise UnknownKeyError("无法确定签名密钥")
 
 
 def verify_id_token(

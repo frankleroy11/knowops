@@ -1,9 +1,17 @@
-"""OIDC discovery, JWKS fetch and authorization-code exchange."""
+"""OIDC discovery, JWKS fetch (with cache) and authorization-code exchange."""
+
+import time
 
 import httpx
 from fastapi import HTTPException
 
 from app.core.config import get_settings
+
+JWKS_CACHE: dict[str, tuple[float, dict]] = {}
+
+
+def reset_jwks_cache() -> None:
+    JWKS_CACHE.clear()
 
 
 class OidcClient:
@@ -32,8 +40,21 @@ class OidcClient:
                 raise HTTPException(503, "OIDC 元数据不完整")
         return metadata
 
-    def jwks(self, jwks_uri: str) -> dict:
-        return self._get_json(jwks_uri)
+    def jwks(self, jwks_uri: str, refresh: bool = False) -> dict:
+        """Serve the signing keys from cache; `refresh` forces a refetch.
+
+        The flow retries with `refresh=True` when an ID token names a key we have
+        never seen, which is exactly what a provider-side key rotation looks like.
+        """
+        ttl = self.settings.oidc_jwks_ttl_seconds
+        cached = JWKS_CACHE.get(jwks_uri)
+        if cached is not None and not refresh:
+            fetched_at, keys = cached
+            if ttl > 0 and time.monotonic() - fetched_at < ttl:
+                return keys
+        keys = self._get_json(jwks_uri)
+        JWKS_CACHE[jwks_uri] = (time.monotonic(), keys)
+        return keys
 
     def exchange_code(self, token_endpoint: str, code: str, redirect_uri: str) -> dict:
         settings = self.settings

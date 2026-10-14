@@ -15,7 +15,7 @@ from app.modules.auth import service as auth_service
 from app.modules.auth.models import User
 from app.modules.oidc.client import OidcClient
 from app.modules.oidc.models import OidcLoginState
-from app.modules.oidc.tokens import TokenError, verify_id_token
+from app.modules.oidc.tokens import TokenError, UnknownKeyError, verify_id_token
 from app.modules.tenant import service as tenants
 
 STATE_TTL = timedelta(minutes=10)
@@ -79,19 +79,59 @@ def authenticate(db: Session, code: str, login_state: OidcLoginState) -> User:
     client = OidcClient(settings)
     metadata = client.discovery()
     tokens = client.exchange_code(metadata["token_endpoint"], code, settings.oidc_redirect_uri)
-    jwks = client.jwks(metadata["jwks_uri"])
-    try:
-        claims = verify_id_token(
+
+    def verify(keys):
+        return verify_id_token(
             tokens["id_token"],
-            jwks,
+            keys,
             issuer=metadata.get("issuer") or settings.oidc_issuer,
             audience=settings.oidc_client_id,
             nonce=login_state.nonce,
             clock_skew=settings.oidc_clock_skew,
         )
+
+    jwks_uri = metadata["jwks_uri"]
+    try:
+        claims = verify(client.jwks(jwks_uri))
+    except UnknownKeyError:
+        # Provider rotated its signing key: refresh once, then give up.
+        try:
+            claims = verify(client.jwks(jwks_uri, refresh=True))
+        except TokenError as exc:
+            raise HTTPException(401, f"ID token 校验失败：{exc}") from None
     except TokenError as exc:
         raise HTTPException(401, f"ID token 校验失败：{exc}") from None
     return map_user(db, claims)
+
+
+def mapped_role(settings, claims) -> str | None:
+    """Translate an IdP group claim into a local role, if configured."""
+    if not settings.oidc_role_map:
+        return None
+    try:
+        mapping = json.loads(settings.oidc_role_map)
+    except ValueError:
+        return None
+    if not isinstance(mapping, dict):
+        return None
+    raw = claims.raw.get(settings.oidc_role_claim)
+    groups = [raw] if isinstance(raw, str) else list(raw or [])
+    for group, role in mapping.items():
+        if group in groups and role in ("admin", "editor", "viewer"):
+            return role
+    return None
+
+
+def sync_role(db: Session, user: User, settings, claims) -> None:
+    """Only touch an existing account's role when role sync is enabled."""
+    if not settings.oidc_role_sync:
+        return
+    mapped = mapped_role(settings, claims)
+    if mapped is None or mapped == user.role:
+        return
+    user.role = mapped
+    db.commit()
+    audit.record(db, user, "user.oidc.role", "user", user.id, f"role={mapped}")
 
 
 def map_user(db: Session, claims) -> User:
@@ -106,6 +146,7 @@ def map_user(db: Session, claims) -> User:
     if linked is not None:
         if not linked.is_active:
             raise HTTPException(401, "账号已停用，请联系管理员")
+        sync_role(db, linked, settings, claims)
         return linked
 
     if not claims.email or not claims.email_verified:
@@ -121,6 +162,7 @@ def map_user(db: Session, claims) -> User:
         existing.oidc_subject = claims.subject
         db.commit()
         audit.record(db, existing, "user.oidc.link", "user", existing.id, f"email={existing.email}")
+        sync_role(db, existing, settings, claims)
         return existing
 
     try:
@@ -128,7 +170,7 @@ def map_user(db: Session, claims) -> User:
         user = auth_service.create_user(
             db,
             claims.email,
-            settings.oidc_default_role,
+            mapped_role(settings, claims) or settings.oidc_default_role,
             claims.name,
             tenant.id if tenant else None,
         )

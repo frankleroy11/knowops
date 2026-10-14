@@ -23,6 +23,9 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 CODE = "good-code"
 KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+# Set by the CLI flags below; a rotation changes both the key and its `kid`.
+KID = "dev"
+GROUPS: list[str] = []
 ISSUER = "http://127.0.0.1:8020"
 PENDING: dict[str, dict] = {}
 
@@ -34,7 +37,7 @@ def b64url(data: bytes) -> str:
 
 
 def id_token(nonce: str, client_id: str, email: str) -> str:
-    header = {"alg": "RS256", "typ": "JWT", "kid": "dev"}
+    header = {"alg": "RS256", "typ": "JWT", "kid": KID}
     now = datetime.now(UTC)
     payload = {
         "iss": ISSUER,
@@ -46,6 +49,7 @@ def id_token(nonce: str, client_id: str, email: str) -> str:
         "email": email,
         "email_verified": True,
         "name": "SSO 联调用户",
+        "groups": GROUPS,
     }
     signing_input = f"{b64url(json.dumps(header).encode())}.{b64url(json.dumps(payload).encode())}"
     signature = KEY.sign(signing_input.encode("ascii"), padding.PKCS1v15(), hashes.SHA256())
@@ -69,7 +73,7 @@ def jwks():
         "keys": [
             {
                 "kty": "RSA",
-                "kid": "dev",
+                "kid": KID,
                 "use": "sig",
                 "alg": "RS256",
                 "n": b64url(numbers.n.to_bytes((numbers.n.bit_length() + 7) // 8, "big")),
@@ -106,5 +110,15 @@ def token(grant_type: str = Form(""), code: str = Form(""), client_id: str = For
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8020)
+    parser.add_argument("--groups", default="", help="逗号分隔的组声明，写入 id_token 的 groups")
+    parser.add_argument(
+        "--rotate",
+        action="store_true",
+        help="换用新密钥与 kid=rotated，用于验证验证方的 JWKS 刷新",
+    )
     arguments = parser.parse_args()
+    GROUPS.extend([g for g in arguments.groups.split(",") if g])
+    if arguments.rotate:
+        KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        KID = "rotated"
     uvicorn.run(app, host="127.0.0.1", port=arguments.port, log_level="warning")
