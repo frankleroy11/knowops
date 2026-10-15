@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -69,6 +70,11 @@ class Settings(BaseSettings):
     # 二次验证（TOTP）
     totp_issuer_name: str = "KnowOps"
     totp_window: int = Field(default=1, ge=0, le=5)
+
+    # Captured per uploaded version; existing versions keep their original policy.
+    chunk_strategy: Literal["fixed", "structure"] = "fixed"
+    chunk_size: int = Field(default=800, ge=200, le=1200)
+    chunk_overlap: int = Field(default=100, ge=0, le=199)
 
     # --- Embedding 适配器 ---
     # provider: bge_m3 = 真实本地模型；hash = 无模型依赖的确定性假向量，仅用于测试与离线开发

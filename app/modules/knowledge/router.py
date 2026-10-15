@@ -14,7 +14,7 @@ from app.adapters.storage import (
     UnsupportedFormat,
 )
 from app.adapters.vectorstore.milvus import collection_name
-from app.core.config import ROOT
+from app.core.config import ROOT, get_settings
 from app.db.deps import DB, get_db  # noqa: F401 - re-exported for existing imports
 from app.modules.audit import service as audit
 from app.modules.auth import service
@@ -243,6 +243,9 @@ def upload(kb_id: int, file: UploadFile, db: DB, principal: CurrentPrincipal):
         version=1,
         content_hash=stored.content_hash,
         storage_path=stored.storage_name,
+        chunk_strategy=get_settings().chunk_strategy,
+        chunk_size=get_settings().chunk_size,
+        chunk_overlap=get_settings().chunk_overlap,
         uploaded_by=principal.id,
     )
     db.add(version)
@@ -291,6 +294,9 @@ def upload_version(document_id: int, file: UploadFile, db: DB, principal: Curren
         version=latest + 1,
         content_hash=stored.content_hash,
         storage_path=stored.storage_name,
+        chunk_strategy=get_settings().chunk_strategy,
+        chunk_size=get_settings().chunk_size,
+        chunk_overlap=get_settings().chunk_overlap,
         uploaded_by=principal.id,
     )
     db.add(version)
@@ -459,6 +465,9 @@ def documents(
             "id": d.id,
             "filename": d.filename,
             "version_id": v.id,
+            "chunk_strategy": v.chunk_strategy,
+            "chunk_size": v.chunk_size,
+            "chunk_overlap": v.chunk_overlap,
             "version": v.version,
             "status": v.status,
             "error": v.error,
@@ -579,6 +588,9 @@ def document_versions(document_id: int, db: DB, principal: CurrentPrincipal):
     return [
         {
             "version_id": v.id,
+            "chunk_strategy": v.chunk_strategy,
+            "chunk_size": v.chunk_size,
+            "chunk_overlap": v.chunk_overlap,
             "version": v.version,
             "status": v.status,
             "error": v.error,
@@ -660,6 +672,9 @@ def document_failures(db: DB, principal: CurrentPrincipal, limit: int = 50, offs
         {
             "id": d.id,
             "version_id": v.id,
+            "chunk_strategy": v.chunk_strategy,
+            "chunk_size": v.chunk_size,
+            "chunk_overlap": v.chunk_overlap,
             "version": v.version,
             "filename": d.filename,
             "knowledge_base_id": kb.id,

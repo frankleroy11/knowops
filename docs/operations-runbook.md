@@ -2,7 +2,7 @@
 
 ## 启动与配置
 
-项目根目录执行 README 中启动流程。宿主机 Conda `knowops` 运行 API 与 solo Worker；Docker Compose 运行 MySQL/Redis/Milvus/etcd/MinIO，可选 Attu。首次复制 `.env.example`，填写密码与 Qwen 配置，缓存 BGE-M3 后可以开启 EMBEDDING_OFFLINE=1。执行 Alembic 至 0011，再构建前端。
+项目根目录执行 README 中启动流程。宿主机 Conda `knowops` 运行 API 与 solo Worker；Docker Compose 运行 MySQL/Redis/Milvus/etcd/MinIO，可选 Attu。首次复制 `.env.example`，填写密码与 Qwen 配置，缓存 BGE-M3 后可以开启 EMBEDDING_OFFLINE=1。执行 Alembic 至当前 head（0012），再构建前端。
 
 认证正常使用 `AUTH_MODE=enforced`。首次运行 `PYTHONPATH=. python scripts/bootstrap_admin.py`；管理员密码仅保存在 `.tmp/local-admin-credentials.json`（0600）。已有启用的平台管理员时不会重置密码。只在本机读取，用后可以删除本地明文凭据文件；登录后通过安全设置修改为自选密码。不要把密码写到命令行、聊天或 Git。
 
