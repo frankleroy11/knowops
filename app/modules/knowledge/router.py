@@ -36,7 +36,12 @@ class KBCreate(BaseModel):
     tenant_id: int | None = None
 
 
+class KBDelete(BaseModel):
+    confirm_name: str = Field(min_length=1, max_length=128)
+
+
 class KBUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=128)
     description: str | None = Field(default=None, max_length=512)
     review_required: bool | None = None
 
@@ -123,18 +128,28 @@ def create_kb(body: KBCreate, db: DB, principal: CurrentPrincipal):
 @router.patch("/knowledge-bases/{kb_id}", response_model=KBOut)
 def update_kb(kb_id: int, body: KBUpdate, db: DB, principal: CurrentPrincipal):
     kb = service.require_kb(db, principal, kb_id, "write")
+    old_name = kb.name
+    if body.name is not None:
+        service.require_admin(principal)
+        if not body.name.strip():
+            raise HTTPException(422, "名称不能为空")
+        kb.name = body.name.strip()
     if body.description is not None:
         kb.description = body.description
     if body.review_required is not None:
         kb.review_required = body.review_required
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "知识库名称已存在") from None
     audit.record(
         db,
         principal,
-        "kb.update",
+        "kb.rename" if kb.name != old_name else "kb.update",
         "knowledge_base",
         kb.id,
-        f"review_required={kb.review_required}",
+        f"old_name={old_name} name={kb.name} review_required={kb.review_required}",
     )
     return {
         "id": kb.id,
@@ -144,6 +159,16 @@ def update_kb(kb_id: int, body: KBUpdate, db: DB, principal: CurrentPrincipal):
         "tenant_id": kb.tenant_id,
         "my_role": service.kb_role(db, principal, kb.id),
     }
+
+
+@router.delete("/knowledge-bases/{kb_id}")
+def delete_kb(kb_id: int, body: KBDelete, db: DB, principal: CurrentPrincipal):
+    from app.modules.knowledge.management import delete_knowledge_base
+
+    try:
+        return delete_knowledge_base(db, principal, kb_id, body.confirm_name, storage_backend())
+    except StorageError:
+        raise HTTPException(409, "存储路径异常，删除已阻止，请联系管理员") from None
 
 
 @router.get("/knowledge-bases", response_model=list[KBOut])
@@ -241,7 +266,9 @@ def upload_version(document_id: int, file: UploadFile, db: DB, principal: Curren
     kb = service.require_kb(db, principal, doc.knowledge_base_id, "write")
     stored = store_upload(file)
     latest = (
-        db.scalar(select(func.max(DocumentVersion.version)).where(DocumentVersion.document_id == doc.id))
+        db.scalar(
+            select(func.max(DocumentVersion.version)).where(DocumentVersion.document_id == doc.id)
+        )
         or 0
     )
     version = DocumentVersion(
@@ -468,9 +495,7 @@ def list_reviews(kb_id: int, db: DB, principal: CurrentPrincipal):
 
 
 @router.post("/document-versions/{version_id}/review")
-def review_version(
-    version_id: int, body: ReviewIn, db: DB, principal: CurrentPrincipal
-):
+def review_version(version_id: int, body: ReviewIn, db: DB, principal: CurrentPrincipal):
     version = review.load_version(db, version_id)
     document = review.document_of(db, version)
     service.require_kb(db, principal, document.knowledge_base_id, "write")

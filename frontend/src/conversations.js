@@ -45,6 +45,9 @@ export function createConversationStore() {
         if (!buckets.has(key)) buckets.set(key, conversation)
       }
     },
+    remove(key) {
+      buckets.delete(key)
+    },
     clear() {
       buckets.clear()
     },
@@ -158,4 +161,11 @@ export function createConversationPersistence(storage) {
       }
     },
   }
+}
+
+/** Deleted knowledge must not survive as a restorable per-KB or unified conversation. */
+export function removeKnowledgeBaseConversations(store, kbId) {
+  store.remove(scopeKey(kbId))
+  const global = store.restore('all')
+  if (global?.messages?.some(m => m.citations?.some(c => c.knowledge_base_id === kbId))) store.remove('all')
 }

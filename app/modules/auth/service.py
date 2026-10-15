@@ -197,9 +197,7 @@ def revoke_tokens(db: Session, user: User) -> int:
 def ensure_membership(db: Session, kb_id: int, user_id: int, role: str) -> KbMember:
     if role not in KB_ROLES:
         raise HTTPException(422, f"知识库角色必须是 {', '.join(KB_ROLES)}")
-    member = db.scalar(
-        select(KbMember).where(KbMember.kb_id == kb_id, KbMember.user_id == user_id)
-    )
+    member = db.scalar(select(KbMember).where(KbMember.kb_id == kb_id, KbMember.user_id == user_id))
     if member is None:
         member = KbMember(kb_id=kb_id, user_id=user_id, role=role)
         db.add(member)
@@ -272,7 +270,11 @@ def has_tenant_access(db: Session, principal: Principal, kb_id: int) -> bool:
 def require_kb(db: Session, principal: Principal, kb_id: int, need: str = "read") -> KnowledgeBase:
     """404 when the knowledge base is missing or belongs to another tenant,
     403 when it exists in the caller's tenant but access is missing."""
-    kb = db.get(KnowledgeBase, kb_id)
+    kb = (
+        db.scalar(select(KnowledgeBase).where(KnowledgeBase.id == kb_id).with_for_update())
+        if need == "write"
+        else db.get(KnowledgeBase, kb_id)
+    )
     if kb is None:
         raise HTTPException(404, "知识库不存在")
     if not has_tenant_access(db, principal, kb_id):
@@ -341,7 +343,9 @@ def validate_password(password: str, user: User | None = None, db: Session | Non
             if user.password_hash:
                 recent.append(user.password_hash)
             if any(verify_password(candidate, previous) for previous in recent):
-                raise HTTPException(422, f"不能使用最近 {settings.password_history_size} 次用过的密码")
+                raise HTTPException(
+                    422, f"不能使用最近 {settings.password_history_size} 次用过的密码"
+                )
     return candidate
 
 
@@ -374,9 +378,7 @@ def record_login_attempt(db: Session, email: str, ip: str = "") -> None:
     """记录一次失败尝试，并顺手清掉窗口外的旧记录。"""
     # 用 API 时钟写入：限流窗口也按同一时钟比较（数据库可能是 UTC）
     db.add(
-        LoginAttempt(
-            email=(email or "").strip().lower(), ip=ip or "", created_at=datetime.now()
-        )
+        LoginAttempt(email=(email or "").strip().lower(), ip=ip or "", created_at=datetime.now())
     )
     db.commit()
     window = get_settings().login_attempt_window_minutes
@@ -414,7 +416,9 @@ def clear_login_attempts(db: Session, email: str, ip: str = "") -> None:
     if ip:
         from sqlalchemy import or_
 
-        conditions = [or_(LoginAttempt.email == (email or "").strip().lower(), LoginAttempt.ip == ip)]
+        conditions = [
+            or_(LoginAttempt.email == (email or "").strip().lower(), LoginAttempt.ip == ip)
+        ]
     db.execute(delete(LoginAttempt).where(*conditions))
     db.commit()
 
@@ -470,9 +474,7 @@ def create_reset_token(db: Session, user: User, ttl_minutes: int | None = None) 
         )
     )
     db.commit()
-    audit.record(
-        db, user, "user.password.reset_requested", "user", user.id, f"email={user.email}"
-    )
+    audit.record(db, user, "user.password.reset_requested", "user", user.id, f"email={user.email}")
     return raw
 
 
@@ -489,7 +491,6 @@ def consume_reset_token(db: Session, raw: str, new_password: str) -> User:
     revoke_tokens(db, user)
     audit.record(db, user, "user.password.reset_completed", "user", user.id, f"email={user.email}")
     return user
-
 
 
 def set_password(db: Session, user: User, password: str, actor=None) -> User:
@@ -648,9 +649,7 @@ def owner_count(db: Session, kb_id: int) -> int:
 
 
 def remove_membership(db: Session, kb_id: int, user_id: int) -> None:
-    member = db.scalar(
-        select(KbMember).where(KbMember.kb_id == kb_id, KbMember.user_id == user_id)
-    )
+    member = db.scalar(select(KbMember).where(KbMember.kb_id == kb_id, KbMember.user_id == user_id))
     if member is None:
         raise HTTPException(404, "该用户不是此知识库成员")
     if member.role == "owner" and owner_count(db, kb_id) <= 1:

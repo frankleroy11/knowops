@@ -38,7 +38,9 @@ def _job(db: Session, version_id: int) -> VectorIndex:
 
 def index_version(version_id):
     with SessionLocal.begin() as db:
-        version = db.get(DocumentVersion, version_id)
+        version = db.scalar(
+            select(DocumentVersion).where(DocumentVersion.id == version_id).with_for_update()
+        )
         if version is None or version.status != "parsed":
             return {"status": "not_parsed"}
         job = _job(db, version_id)

@@ -89,8 +89,17 @@ class LocalStorage:
             size=total,
         )
 
+    def checked_delete_path(self, storage_name: str) -> Path:
+        if (
+            not storage_name
+            or Path(storage_name).name != storage_name
+            or storage_name in {".", ".."}
+        ):
+            raise StorageError("存储文件名不合法")
+        return self.path(storage_name)
+
     def delete(self, storage_name: str) -> bool:
-        target = self.path(storage_name)
+        target = self.checked_delete_path(storage_name)
         if target.is_file():
             target.unlink()
             return True

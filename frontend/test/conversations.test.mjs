@@ -7,6 +7,7 @@ import {
   STORAGE_KEY,
   createConversationPersistence,
   createConversationStore,
+  removeKnowledgeBaseConversations,
   parseConversations,
   scopeKey,
   snapshotConversations,
@@ -213,4 +214,23 @@ test('no storage means no persistence but the app still works', () => {
   assert.equal(persistence.save([['all', { messages: [], question: '' }]]), false)
   persistence.clear()
   assert.equal(STORAGE_KEY, 'knowops.conversations')
+})
+
+test('deleting a knowledge base removes its scope and unified citations but preserves other scopes', () => {
+  const store = createConversationStore()
+  store.stash('3', {messages:[{text:'deleted'}]})
+  store.stash('7', {messages:[{text:'keep'}]})
+  store.stash('all', {messages:[{citations:[{knowledge_base_id:3,content:'deleted secret'}]}]})
+  removeKnowledgeBaseConversations(store,3)
+  assert.equal(store.restore('3'), null)
+  assert.equal(store.restore('all'), null)
+  assert.equal(store.restore('7').messages[0].text,'keep')
+  assert.equal(JSON.stringify(snapshotConversations(store.entries())).includes('deleted'), false)
+})
+
+test('deleting another KB preserves unified conversation with unrelated citations', () => {
+  const store = createConversationStore()
+  store.stash('all', {messages:[{citations:[{knowledge_base_id:7}]}]})
+  removeKnowledgeBaseConversations(store,3)
+  assert.ok(store.restore('all'))
 })
