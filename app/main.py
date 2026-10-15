@@ -58,3 +58,7 @@ from app.core.config import ROOT
 frontend_dist = ROOT / "frontend" / "dist"
 if frontend_dist.is_dir():
     app.mount("/ui", StaticFiles(directory=frontend_dist, html=True), name="ui")
+
+from app.modules.system.router import router as system_router
+
+app.include_router(system_router, prefix="/api/v1")

@@ -29,6 +29,17 @@ const issuedToken = ref(''), adminBusy = ref(false)
 const showMembers = ref(false), members = ref([]), memberForm = ref({email: '', role: 'viewer'})
 const showReviews = ref(false), reviews = ref([]), reviewNote = ref('')
 const auditLogs = ref([]), auditTenant = ref('')
+const systemStatus = ref(null), systemLoading = ref(false), systemError = ref('')
+const systemLabels = {mysql:'MySQL',redis:'Redis',milvus:'Milvus',worker:'Worker',jobs:'文档任务'}
+const jobLabels = {pending:'等待处理',parsed:'解析完成',failed:'失败',indexing:'正在索引',indexed:'索引完成'}
+const statusLabels = {ok:'正常',unknown:'待确认',unavailable:'不可用'}
+async function loadSystemStatus() {
+  if (systemLoading.value) return
+  systemLoading.value = true; systemError.value = ''; systemStatus.value = null
+  try { systemStatus.value = await api('/admin/system/status') }
+  catch (e) { systemError.value = e.message }
+  finally { systemLoading.value = false }
+}
 
 // 登录页（含二次验证码与自助重置）
 const loginCode = ref(''), needCode = ref(false)
@@ -426,6 +437,7 @@ async function enterConsole(section = 'knowledge') {
   issuedToken.value = ''
   if (section === 'users' || section === 'tenants') await loadUsers()
   if (section === 'audit') await loadAudit()
+  if (section === 'system' && me.value?.is_platform_admin) await loadSystemStatus()
   if (section === 'knowledge') await loadKB()
 }
 
@@ -663,6 +675,7 @@ onUnmounted(() => clearInterval(timer))
         <button :class="{chosen:consoleSection==='knowledge'}" @click="enterConsole('knowledge')">知识库</button>
         <button :class="{chosen:consoleSection==='users'}" @click="enterConsole('users')">用户</button>
         <button v-if="me.is_platform_admin" :class="{chosen:consoleSection==='tenants'}" @click="enterConsole('tenants')">租户</button>
+        <button v-if="me.is_platform_admin" :class="{chosen:consoleSection==='system'}" @click="enterConsole('system')">系统状态</button>
         <button :class="{chosen:consoleSection==='audit'}" @click="enterConsole('audit')">审计</button>
       </nav>
 
@@ -799,8 +812,8 @@ onUnmounted(() => clearInterval(timer))
       <div class="page-head">
         <div>
           <span class="eyebrow">ADMIN CONSOLE</span>
-          <h1>{{({knowledge:'知识库管理',users:'用户管理',tenants:'租户管理',audit:'审计日志'})[consoleSection]}}</h1>
-          <p>{{({knowledge:'创建与维护知识库；进入某个知识库可上传资料、审核版本、分配成员。',users:'创建账号、调整角色与租户、签发或吊销 Token。',tenants:'平台级租户的新建与查看，所有数据按租户隔离。',audit:'谁在何时对哪个对象做了什么；可按租户筛选并导出 CSV。'})[consoleSection]}}</p>
+          <h1>{{({knowledge:'知识库管理',users:'用户管理',tenants:'租户管理',audit:'审计日志',system:'系统状态'})[consoleSection]}}</h1>
+          <p>{{({knowledge:'创建与维护知识库；进入某个知识库可上传资料、审核版本、分配成员。',users:'创建账号、调整角色与租户、签发或吊销 Token。',tenants:'平台级租户的新建与查看，所有数据按租户隔离。',audit:'谁在何时对哪个对象做了什么；可按租户筛选并导出 CSV。',system:'检查基础服务连接、Worker 响应和文档任务状态。'})[consoleSection]}}</p>
         </div>
       </div>
 
@@ -912,6 +925,32 @@ onUnmounted(() => clearInterval(timer))
           </table>
           <div v-if="!tenants.length" class="empty">当前只有默认租户。</div>
         </div>
+      </section>
+
+      <section v-else-if="consoleSection==='system'" class="console" aria-label="系统状态">
+        <div class="console-toolbar">
+          <button class="primary" :disabled="systemLoading" @click="loadSystemStatus">{{systemLoading?'正在检查…':'刷新状态'}}</button>
+          <span v-if="systemStatus" class="muted">检查时间：{{new Date(systemStatus.checked_at).toLocaleString()}}</span>
+        </div>
+        <p v-if="systemError" role="alert">检查请求失败：{{systemError}}。请刷新重试。</p>
+        <p v-if="systemLoading" role="status">正在检查服务，请稍候。</p>
+        <template v-if="systemStatus">
+          <p role="status">{{systemStatus.status==='ok'?'各项检查正常':'部分状态异常或待确认，请查看下方详情。'}}</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th>服务</th><th>状态</th><th>检查耗时</th><th>说明</th></tr></thead>
+            <tbody><tr v-for="(item,key) in systemStatus.checks" :key="key">
+              <td>{{systemLabels[key] || key}}</td><td><span class="badge" :class="{ready:item.status==='ok'}">{{key==='jobs' && item.status==='ok'?'统计成功':(statusLabels[item.status] || item.status)}}</span></td>
+              <td>{{item.latency_ms}} ms</td><td>{{item.detail}}<template v-if="key==='worker'"> · 响应节点 {{item.workers ?? 0}}</template></td>
+            </tr></tbody>
+          </table></div>
+          <div v-if="systemStatus.checks.jobs.status==='ok'" class="console-card">
+            <h3>文档处理状态</h3>
+            <p v-if="systemStatus.checks.jobs.parsing.failed || systemStatus.checks.jobs.indexing.failed" role="status">存在处理失败的记录，请到对应知识库的资料页查看错误并决定是否重试。</p>
+            <p>解析：<span v-for="(count,state) in systemStatus.checks.jobs.parsing" :key="state">{{jobLabels[state] || state}} {{count}} · </span></p>
+            <p>索引：<span v-for="(count,state) in systemStatus.checks.jobs.indexing" :key="state">{{jobLabels[state] || state}} {{count}} · </span></p>
+          </div>
+          <p class="muted">这是手动刷新时的状态快照。Worker 无响应可能是正在执行长任务；全部正常也不代表问答质量或完整上传链路已通过验证。</p>
+        </template>
       </section>
 
       <section v-else class="console">
