@@ -229,6 +229,7 @@ def list_users(
 ):
     from sqlalchemy import or_, select
 
+    # 在数据库查询阶段限制租户，再搜索和分页，避免加载其他空间用户。
     query = select(User)
     if not principal.is_platform_admin:
         query = query.where(User.tenant_id == principal.tenant_id)
@@ -274,6 +275,7 @@ def create_user(body: UserCreate, db: DB, principal: AdminPrincipal):
 def patch_user(user_id: int, body: UserPatch, db: DB, principal: AdminPrincipal):
     from app.modules.auth import accounts
 
+    # 只传客户端明确提供的字段：未填写的字段保持原值，不套用模型默认值。
     user = accounts.update(db, principal, user_id, body.model_dump(exclude_unset=True))
     return user_out(db, user)
 
@@ -389,6 +391,7 @@ def reset_password(user_id: int, body: PasswordReset, db: DB, principal: AdminPr
     return {"user_id": user.id, "ok": True}
 
 
+# 禁止额外字段，拒绝通过 role、tenant_id 等参数给公开注册提权。
 class RegisterIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     email: str = Field(min_length=5, max_length=255)
@@ -413,6 +416,7 @@ class RegisterIn(BaseModel):
         return value
 
 
+# 登录页无需身份即可查询入口开关；实际注册接口还会再次验证配置。
 @router.get("/auth/options")
 def options():
     return {
@@ -425,6 +429,7 @@ def options():
 def register(body: RegisterIn, db: DB, request: Request):
     from app.modules.auth import accounts
 
+    # 免鉴权模式下所有请求都是本地管理员，因此不允许用它模拟真实注册。
     require_realm("注册")
     if body.password != body.confirm_password:
         raise HTTPException(422, "两次密码不一致")

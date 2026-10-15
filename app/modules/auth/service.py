@@ -112,6 +112,7 @@ def list_users(db: Session) -> list[User]:
     return list(db.scalars(select(User).order_by(User.id)))
 
 
+# 管理页统计“仍可登录”的 Token：同时排除已吊销和已过期的记录。
 def active_token_count(db: Session, user_id: int) -> int:
     return (
         db.scalar(
@@ -416,6 +417,7 @@ def clear_login_attempts(db: Session, email: str, ip: str = "") -> None:
     几次输错口令就会把整个出口锁到窗口结束。取舍是：攻击者若已掌握一个有效账号，
     可通过一次成功登录重置该 IP 的计数——但此时它已不再是"盲撞库"场景。
     """
+    # 成功登录仅清除当前账号的失败记录，不能替其他账号清除 IP 限流。
     conditions = [LoginAttempt.email == (email or "").strip().lower()]
     if ip:
         conditions.append(LoginAttempt.ip == ip)
@@ -497,6 +499,7 @@ def set_password(db: Session, user: User, password: str, actor=None) -> User:
     validate_password(password, user=user, db=db)
     remember_password(db, user)
     user.password_hash = hash_password(password)
+    # 自助修改和管理员重置共用这条路径，密码更新后统一吊销旧登录凭据。
     for token in db.scalars(
         select(ApiToken).where(ApiToken.user_id == user.id, ApiToken.revoked_at.is_(None))
     ):

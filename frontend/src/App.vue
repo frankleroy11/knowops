@@ -166,6 +166,7 @@ async function api(path, options = {}) {
 }
 function json(data) { return {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)} }
 function patch(data) { return {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)} }
+// 退出或会话过期时清除一次性凭据和密码表单，避免下一个账号看到残留。
 function clearAccountSecrets() {
   issuedToken.value=''; passwordUser.value=null; adminPassword.value=''; adminPasswordConfirm.value=''; adminForm.value.password=''
 }
@@ -315,6 +316,8 @@ async function signIn() {
     await loadKB(); await loadDocs()
   } catch (e) { loginError.value = e.message } finally { busyLogin.value = false }
 }
+// 前端先检查密码确认；真正的格式、密码策略和空间隔离仍由后端执行。
+// 注册成功不自动获取管理会话，返回登录并预填邮箱。
 async function registerAccount() {
   if (registration.value.password!==registration.value.confirm_password) { registerNotice.value='两次密码不一致'; return }
   busyRegister.value=true; registerNotice.value=''
@@ -325,6 +328,7 @@ async function registerAccount() {
     registerMode.value=false; loginError.value=''; registerNotice.value=data.detail
   } catch(e) { registerNotice.value=e.message } finally { busyRegister.value=false }
 }
+// 管理员重置成员密码会使该成员旧会话失效；成功后立即清空表单中的明文。
 async function resetUserPassword() {
   if (adminPassword.value!==adminPasswordConfirm.value) return
   adminBusy.value=true
@@ -334,6 +338,8 @@ async function resetUserPassword() {
     notice.value='密码已设置，旧登录凭据已吊销，请通知成员重新登录。'
   } catch(e) { fail(e) } finally { adminBusy.value=false }
 }
+// 邮箱密码登录先拿 Token，再查询 /auth/me，以后端身份决定可见功能。
+// 服务端要求 TOTP 时才展示二次验证码输入。
 async function passwordLogin() {
   busyPassword.value = true; loginError.value = ''
   try {
@@ -490,6 +496,7 @@ async function setUserTenant(u, value) {
     await loadUsers()
   } catch (e) { fail(e); await loadUsers() } finally { adminBusy.value = false }
 }
+// 搜索/筛选/分页交给后端；不能靠前端过滤实现租户隔离。
 async function loadUsers() {
   adminBusy.value = true
   try { const query=new URLSearchParams({q:userQuery.value,limit:'50',offset:String(userPage.value*50)}); if(userRoleFilter.value) query.set('role',userRoleFilter.value); if(userStateFilter.value) query.set('active',userStateFilter.value); users.value = await api('/admin/users?'+query); await loadTenants() } catch (e) { fail(e) } finally { adminBusy.value = false }
