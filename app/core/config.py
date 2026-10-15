@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # off = 单机开发模式，所有请求视为本地管理员（保持历史行为）
     # enforced = 必须携带 Authorization: Bearer <token>，否则 401
     auth_mode: str = "off"
+    public_registration_enabled: bool = False
 
     # --- OIDC 单点登录（可选）---
     oidc_enabled: bool = False

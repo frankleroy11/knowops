@@ -20,9 +20,14 @@ const page = ref(0), loading = ref(false), action = ref(null)
 const token = ref(localStorage.getItem(TOKEN_KEY) || '')
 const me = ref(null), needsLogin = ref(false), loginToken = ref(''), loginError = ref(''), busyLogin = ref(false), ssoEnabled = ref(false)
 const loginEmail = ref(''), loginPassword = ref(''), busyPassword = ref(false)
+const registrationEnabled = ref(false), registerMode = ref(false), busyRegister = ref(false), registerNotice = ref('')
+const registration = ref({email:'',display_name:'',password:'',confirm_password:''})
+const showLoginPassword = ref(false)
+const userQuery = ref(''), userRoleFilter = ref(''), userStateFilter = ref(''), userPage = ref(0)
+const passwordUser = ref(null), adminPassword = ref(''), adminPasswordConfirm = ref('')
 const loginMethod = ref(localStorage.getItem(METHOD_KEY) || '')
 
-const users = ref([]), adminForm = ref({email: '', display_name: '', role: 'viewer', tenant_id: ''})
+const users = ref([]), adminForm = ref({email: '', display_name: '', role: 'viewer', tenant_id: '', password:''})
 const tenants = ref([]), tenantForm = ref({name: '', slug: ''})
 const kbAction = ref(null), kbName = ref(''), kbConfirmation = ref('')
 const issuedToken = ref(''), adminBusy = ref(false)
@@ -150,7 +155,7 @@ async function api(path, options = {}) {
     const data = r.status === 204 ? null : await r.json()
     if (r.status === 401) {
       conversations.clear(); persistence.clear(); messages.value = []
-      needsLogin.value = true
+      needsLogin.value = true; clearAccountSecrets()
       throw new Error('登录已失效，请重新登录')
     }
     if (!r.ok) throw new Error(typeof data?.detail === 'string' ? data.detail : '请求未通过校验，请检查输入')
@@ -161,6 +166,9 @@ async function api(path, options = {}) {
 }
 function json(data) { return {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)} }
 function patch(data) { return {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)} }
+function clearAccountSecrets() {
+  issuedToken.value=''; passwordUser.value=null; adminPassword.value=''; adminPasswordConfirm.value=''; adminForm.value.password=''
+}
 function fail(e) { error.value = e.name === 'AbortError' ? '请求超时，请稍后重试' : e.message }
 
 async function loadKB() {
@@ -307,6 +315,25 @@ async function signIn() {
     await loadKB(); await loadDocs()
   } catch (e) { loginError.value = e.message } finally { busyLogin.value = false }
 }
+async function registerAccount() {
+  if (registration.value.password!==registration.value.confirm_password) { registerNotice.value='两次密码不一致'; return }
+  busyRegister.value=true; registerNotice.value=''
+  try {
+    const r=await fetch('/api/v1/auth/register',json(registration.value)); const data=await r.json()
+    if (!r.ok) throw new Error(typeof data.detail==='string'?data.detail:'请检查邮箱、显示名和密码格式')
+    loginEmail.value=registration.value.email; registration.value={email:'',display_name:'',password:'',confirm_password:''}
+    registerMode.value=false; loginError.value=''; registerNotice.value=data.detail
+  } catch(e) { registerNotice.value=e.message } finally { busyRegister.value=false }
+}
+async function resetUserPassword() {
+  if (adminPassword.value!==adminPasswordConfirm.value) return
+  adminBusy.value=true
+  try {
+    await api(`/admin/users/${passwordUser.value.id}/password`,json({password:adminPassword.value}))
+    passwordUser.value=null; adminPassword.value=''; adminPasswordConfirm.value=''; await loadUsers()
+    notice.value='密码已设置，旧登录凭据已吊销，请通知成员重新登录。'
+  } catch(e) { fail(e) } finally { adminBusy.value=false }
+}
 async function passwordLogin() {
   busyPassword.value = true; loginError.value = ''
   try {
@@ -338,7 +365,7 @@ async function signOut() {
       oidcLogoutUrl = result?.oidc_logout_url || ''
     } catch (e) { /* 本地清理优先 */ }
   }
-  token.value = ''
+  token.value = ''; clearAccountSecrets(); showSecurity.value=false
   conversations.clear(); persistence.clear()
   localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(METHOD_KEY); loginMethod.value = ''
   me.value = null; kbs.value = []; docs.value = []; messages.value = []; users.value = []; members.value = []
@@ -360,7 +387,7 @@ async function changePassword() {
   try {
     await api('/auth/password', json(pwForm.value))
     pwForm.value = {current_password: '', new_password: ''}
-    securityNotice.value = '密码已更新，下次登录请使用新密码。'
+    showSecurity.value=false; await signOut(); loginError.value=''; registerNotice.value='密码已更新，请重新登录。'
   } catch (e) { securityError.value = e.message } finally { busySecurity.value = false }
 }
 
@@ -432,6 +459,7 @@ async function bootstrap() {
   const saved = conversations.restore(activeScope)
   if (saved) { messages.value = saved.messages; question.value = saved.question }
   await loadSsoStatus()
+  try { registrationEnabled.value=!!(await (await fetch('/api/v1/auth/options')).json()).registration_enabled } catch(e) { registrationEnabled.value=false }
   try {
     me.value = await api('/auth/me')
     needsLogin.value = false
@@ -464,7 +492,7 @@ async function setUserTenant(u, value) {
 }
 async function loadUsers() {
   adminBusy.value = true
-  try { users.value = await api('/admin/users'); await loadTenants() } catch (e) { fail(e) } finally { adminBusy.value = false }
+  try { const query=new URLSearchParams({q:userQuery.value,limit:'50',offset:String(userPage.value*50)}); if(userRoleFilter.value) query.set('role',userRoleFilter.value); if(userStateFilter.value) query.set('active',userStateFilter.value); users.value = await api('/admin/users?'+query); await loadTenants() } catch (e) { fail(e) } finally { adminBusy.value = false }
 }
 
 /** 进入管理控制台：管理员专用界面，交付知识库/用户/租户/审计。 */
@@ -505,12 +533,13 @@ async function createUser() {
   adminBusy.value = true; error.value = ''
   try {
     const payload = {...adminForm.value, email: adminForm.value.email.trim()}
+    if (!payload.password) delete payload.password
     if (payload.tenant_id === '') delete payload.tenant_id
     else payload.tenant_id = Number(payload.tenant_id)
     const data = await api('/admin/users', json(payload))
-    adminForm.value = {email: '', display_name: '', role: 'viewer', tenant_id: ''}
+    adminForm.value = {email: '', display_name: '', role: 'viewer', tenant_id: '', password:''}
     await loadUsers()
-    notice.value = `已创建用户 ${data.email}；需要登录凭证时请点击该行的“签发 Token”。`
+    notice.value = `已创建用户 ${data.email}；可在该行设置登录密码，或签发 API Token。`
   } catch (e) { fail(e) } finally { adminBusy.value = false }
 }
 async function issueTokenFor(u) {
@@ -640,18 +669,32 @@ onUnmounted(() => clearInterval(timer))
     </section>
 
     <section class="login-panel">
-      <form v-if="forgotView==='none'" class="login-card" @submit.prevent="passwordLogin">
+      <form v-if="registerMode" class="login-card" @submit.prevent="registerAccount">
+        <h2>注册 KnowOps</h2><p class="muted">开放演示注册：每个账号获得独立空间，可创建知识库和管理成员。邮箱不作验证，不会加入其他人的空间。</p>
+        <label>显示名<input v-model="registration.display_name" required minlength="2" maxlength="60" autocomplete="nickname" aria-label="注册显示名"></label>
+        <label>邮箱<input v-model="registration.email" type="email" required maxlength="255" autocomplete="username" aria-label="注册邮箱"></label>
+        <label>密码<input v-model="registration.password" type="password" required minlength="8" maxlength="256" autocomplete="new-password" aria-label="注册密码"></label>
+        <label>确认密码<input v-model="registration.confirm_password" type="password" required autocomplete="new-password" aria-label="注册确认密码"></label>
+        <p class="muted">至少 8 位，包含字母、数字和符号，不使用邮箱名或常见弱密码。</p>
+        <div v-if="registerNotice" class="alert" role="alert">{{registerNotice}}</div>
+        <button class="primary block" :disabled="busyRegister">{{busyRegister?'注册中…':'创建账号'}}</button>
+        <button type="button" class="text-button" :disabled="busyRegister" @click="registerMode=false;registerNotice=''">已有账号，返回登录</button>
+      </form>
+      <form v-else-if="forgotView==='none'" class="login-card" @submit.prevent="passwordLogin">
         <h2>登录 KnowOps</h2>
         <p class="muted">成员与管理员使用同一个入口，登录后按账号角色展示可用功能。</p>
         <button v-if="ssoEnabled" type="button" class="ghost sso-button" @click="ssoLogin">使用企业 SSO 登录 →</button>
         <label>邮箱<input v-model="loginEmail" type="email" autocomplete="username" placeholder="you@corp.com" aria-label="邮箱" required></label>
-        <label>密码<input v-model="loginPassword" type="password" autocomplete="current-password" aria-label="密码" required></label>
+        <label>密码<input v-model="loginPassword" :type="showLoginPassword?'text':'password'" autocomplete="current-password" aria-label="密码" required></label>
+        <button type="button" class="text-button" @click="showLoginPassword=!showLoginPassword">{{showLoginPassword?'隐藏密码':'显示密码'}}</button>
+        <div v-if="registerNotice" class="alert" role="status">{{registerNotice}}</div>
         <label v-if="needCode">二次验证码<input v-model="loginCode" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位动态验证码" aria-label="二次验证码" maxlength="16"></label>
         <div v-if="loginError" role="alert" class="alert error">{{loginError}}</div>
         <button class="primary block" :disabled="busyPassword||!loginEmail.trim()||!loginPassword">{{busyPassword?'验证中…':'登录'}}</button>
         <div class="login-links">
           <button type="button" class="text-button" @click="forgotView='request'; forgotNotice=''">忘记密码？</button>
-          <span class="muted" style="font-size:12px">{{needCode?'该账号已开启二次验证':'首次使用请联系管理员开通账号'}}</span>
+          <button v-if="registrationEnabled" type="button" class="text-button" @click="registerMode=true;registerNotice=''">注册账号</button>
+          <span class="muted" style="font-size:12px">{{needCode?'该账号已开启二次验证':(registrationEnabled?'注册即可体验独立演示空间':'首次使用请联系管理员开通账号')}}</span>
         </div>
         <details class="token-login"><summary>改用 API Token 登录</summary>
           <label>API Token<input v-model="loginToken" type="password" autocomplete="off" placeholder="knp_…" aria-label="API Token"></label>
@@ -896,17 +939,24 @@ onUnmounted(() => clearInterval(timer))
       <section v-else-if="consoleSection==='users'" class="console">
         <form class="console-card" @submit.prevent="createUser">
           <h3>新建用户</h3>
-          <p class="muted">新用户默认没有口令：用 <code>scripts/manage_users.py set-password</code> 设置，或让用户走登录页的"忘记密码"流程。</p>
+          <p class="muted">为当前空间添加成员，可填写初始密码；留空时稍后通过“设置密码”或 API Token 开通登录。</p>
           <div class="inline-form">
             <input v-model="adminForm.email" type="email" required placeholder="邮箱" aria-label="用户邮箱">
             <input v-model="adminForm.display_name" placeholder="显示名（可选）" aria-label="显示名">
+            <input v-model="adminForm.password" type="password" autocomplete="new-password" minlength="8" placeholder="初始密码（可选）" aria-label="成员初始密码">
             <select v-model="adminForm.role" aria-label="全局角色"><option value="viewer">viewer · 只读</option><option value="editor">editor · 可编辑</option><option value="admin">admin · 管理员</option></select>
             <select v-if="tenants.length" v-model="adminForm.tenant_id" aria-label="所属租户">
-              <option value="">所属租户：默认</option>
+              <option value="">平台级（不属于租户）</option>
               <option v-for="t in tenants" :key="t.id" :value="t.id">{{t.name}}</option>
             </select>
             <button class="primary" :disabled="adminBusy||!adminForm.email.trim()">创建用户</button>
           </div>
+        </form>
+        <form class="console-toolbar" @submit.prevent="userPage=0;loadUsers()">
+          <input v-model="userQuery" placeholder="搜索邮箱或显示名" aria-label="搜索用户">
+          <select v-model="userRoleFilter" aria-label="筛选角色"><option value="">全部角色</option><option value="admin">管理员</option><option value="editor">编辑者</option><option value="viewer">只读成员</option></select>
+          <select v-model="userStateFilter" aria-label="筛选状态"><option value="">全部状态</option><option value="true">启用</option><option value="false">停用</option></select>
+          <button :disabled="adminBusy">搜索</button>
         </form>
         <div v-if="issuedToken" class="token-callout">
           <b>新 Token（仅显示一次）</b>
@@ -915,33 +965,35 @@ onUnmounted(() => clearInterval(timer))
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>用户</th><th>角色</th><th>租户</th><th>状态</th><th>有效 Token</th><th>操作</th></tr></thead>
+            <thead><tr><th>用户</th><th>角色</th><th>租户</th><th>状态</th><th>登录方式 / 有效 Token</th><th>操作</th></tr></thead>
             <tbody>
               <tr v-for="u in users" :key="u.id">
                 <td>{{u.display_name || u.email}}<small v-if="u.display_name && u.display_name !== u.email">{{u.email}}</small></td>
                 <td>
-                  <select :value="u.role" :disabled="adminBusy" aria-label="调整角色" @change="setUserRole(u,$event.target.value)">
+                  <select :value="u.role" :disabled="adminBusy||u.id===me.id" aria-label="调整角色" @change="setUserRole(u,$event.target.value)">
                     <option value="viewer">viewer</option><option value="editor">editor</option><option value="admin">admin</option>
                   </select>
                 </td>
                 <td>
-                  <select v-if="me?.is_platform_admin" :value="u.tenant_id ?? ''" :disabled="adminBusy" aria-label="调整租户" @change="setUserTenant(u,$event.target.value)">
+                  <select v-if="me?.is_platform_admin" :value="u.tenant_id ?? ''" :disabled="adminBusy||u.id===me.id" aria-label="调整租户" @change="setUserTenant(u,$event.target.value)">
                     <option value="">平台级</option>
                     <option v-for="t in tenants" :key="t.id" :value="t.id">{{t.name}}</option>
                   </select>
                   <span v-else class="badge">{{u.tenant_id ?? '—'}}</span>
                 </td>
                 <td><span class="badge" :class="{ready:u.is_active}">{{u.is_active?'启用':'停用'}}</span></td>
-                <td>{{u.active_tokens}}</td>
+                <td>{{u.password_configured?'密码已设置':'未设置密码'}} · {{u.active_tokens}}<small v-if="u.locked_until">锁定至 {{u.locked_until}}</small></td>
                 <td class="row-actions">
-                  <button class="text-button" :disabled="adminBusy" @click="issueTokenFor(u)">签发 Token</button>
+                  <button v-if="u.id!==me.id" class="text-button" :disabled="adminBusy" @click="passwordUser=u;adminPassword='';adminPasswordConfirm=''">设置密码</button>
+                  <button class="text-button" :disabled="adminBusy||!u.is_active" @click="issueTokenFor(u)">签发 Token</button>
                   <button class="text-button" :disabled="adminBusy||!u.active_tokens" @click="revokeUserTokens(u)">吊销</button>
-                  <button class="text-button" :disabled="adminBusy" @click="toggleUserActive(u)">{{u.is_active?'停用':'启用'}}</button>
+                  <button class="text-button" :disabled="adminBusy||u.id===me.id" @click="toggleUserActive(u)">{{u.is_active?'停用':'启用'}}</button>
                 </td>
               </tr>
             </tbody>
           </table>
-          <div v-if="!users.length" class="empty">正在加载用户…</div>
+          <div v-if="!users.length" class="empty">{{adminBusy?'正在加载用户…':'没有符合条件的用户。'}}</div>
+          <div class="pagination"><button :disabled="adminBusy||userPage===0" @click="userPage--;loadUsers()">上一页</button><span>第 {{userPage+1}} 页 · 每页 50 人</span><button :disabled="adminBusy||users.length<50" @click="userPage++;loadUsers()">下一页</button></div>
         </div>
       </section>
 
@@ -1051,6 +1103,12 @@ onUnmounted(() => clearInterval(timer))
     </form>
   </div>
 
+  <div v-if="passwordUser" class="overlay" @click.self="!adminBusy && (passwordUser=null)"><form class="modal" role="dialog" aria-modal="true" aria-label="设置成员密码" @submit.prevent="resetUserPassword">
+    <h2>设置密码 · {{passwordUser.email}}</h2><p>设置后该成员所有旧 Token 将失效，需要重新登录。</p>
+    <label>新密码<input v-model="adminPassword" type="password" required minlength="8" autocomplete="new-password" aria-label="成员新密码"></label>
+    <label>确认新密码<input v-model="adminPasswordConfirm" type="password" required autocomplete="new-password" aria-label="成员确认新密码"></label>
+    <div class="modal-actions"><button class="primary" :disabled="adminBusy||!adminPassword||adminPassword!==adminPasswordConfirm">保存密码</button><button type="button" :disabled="adminBusy" @click="passwordUser=null;adminPassword='';adminPasswordConfirm=''">取消</button></div>
+  </form></div>
   <!-- ================= 安全设置 ================= -->
   <div v-if="showSecurity" class="overlay" @click.self="showSecurity=false">
     <section role="dialog" aria-modal="true" aria-label="安全设置" class="modal">

@@ -33,6 +33,12 @@ celery -A app.workers.celery_app:celery_app worker --pool=solo --loglevel=info -
 
 `AUTH_MODE=off` 是明确的本地免鉴权模式，所有调用均视为平台管理员。正常使用推荐 `enforced`；本次已在本机开启。修改 `.env` 后重启 API/Worker，不能依赖前端刷新或 `.env` 自动重载。
 
+## 开放注册与多用户演示
+
+本机已开放注册：登录页点击“注册账号”，成功后获得独立演示空间，可管理自己的知识库和成员。不会自动进入原有企业空间。平台管理员可统一搜索与管理账号，租户管理员仅管理自己空间。邮箱验证和邮件发送未接入；忘记密码请联系管理员。
+
+详见 [注册、登录和多用户管理](docs/public-registration-users.md)。`PUBLIC_REGISTRATION_ENABLED=false` 可关闭公开注册；仅在强制登录模式生效。
+
 ## 用户流程与角色
 
 1. 管理员创建租户、账号、知识库，分配成员权限。

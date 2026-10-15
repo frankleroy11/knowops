@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 
 from fastapi import HTTPException
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -117,7 +117,11 @@ def active_token_count(db: Session, user_id: int) -> int:
         db.scalar(
             select(func.count())
             .select_from(ApiToken)
-            .where(ApiToken.user_id == user_id, ApiToken.revoked_at.is_(None))
+            .where(
+                ApiToken.user_id == user_id,
+                ApiToken.revoked_at.is_(None),
+                or_(ApiToken.expires_at.is_(None), ApiToken.expires_at > datetime.now()),
+            )
         )
         or 0
     )
@@ -414,11 +418,7 @@ def clear_login_attempts(db: Session, email: str, ip: str = "") -> None:
     """
     conditions = [LoginAttempt.email == (email or "").strip().lower()]
     if ip:
-        from sqlalchemy import or_
-
-        conditions = [
-            or_(LoginAttempt.email == (email or "").strip().lower(), LoginAttempt.ip == ip)
-        ]
+        conditions.append(LoginAttempt.ip == ip)
     db.execute(delete(LoginAttempt).where(*conditions))
     db.commit()
 
@@ -497,6 +497,10 @@ def set_password(db: Session, user: User, password: str, actor=None) -> User:
     validate_password(password, user=user, db=db)
     remember_password(db, user)
     user.password_hash = hash_password(password)
+    for token in db.scalars(
+        select(ApiToken).where(ApiToken.user_id == user.id, ApiToken.revoked_at.is_(None))
+    ):
+        token.revoked_at = datetime.now()
     user.failed_logins = 0
     user.locked_until = None
     db.commit()
