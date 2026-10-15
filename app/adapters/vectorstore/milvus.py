@@ -1,5 +1,6 @@
 import hashlib
 import json
+from uuid import uuid4
 
 from pymilvus import DataType, MilvusClient
 
@@ -24,7 +25,9 @@ def collection_name():
 class MilvusStore:
     def __init__(self):
         self.name = collection_name()
-        self.client = MilvusClient(uri=get_settings().milvus_uri, timeout=10)
+        self.client = MilvusClient(
+            uri=get_settings().milvus_uri, timeout=10, alias=f"knowops-{uuid4().hex}"
+        )
 
     def ensure(self):
         if self.client.has_collection(self.name):
@@ -68,6 +71,11 @@ class MilvusStore:
             limit=limit,
             search_params={"metric_type": "COSINE", "params": {"ef": 64}},
         )[0]
+
+    def delete_knowledge_base(self, kb_id, collection=None):
+        name = collection or self.name
+        if self.client.has_collection(name):
+            self.client.delete(name, filter=f"knowledge_base_id == {int(kb_id)}")
 
     def close(self):
         self.client.close()

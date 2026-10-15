@@ -1,10 +1,11 @@
 <script setup>
-import {ref, computed, onMounted, onUnmounted, watch} from 'vue'
+import {ref, computed, onMounted, onUnmounted, watch, nextTick} from 'vue'
 import {
   createConversationPersistence,
   createConversationStore,
   scopeKey,
-  switchScope
+  switchScope,
+  removeKnowledgeBaseConversations
 } from './conversations.js'
 
 const TOKEN_KEY = 'knowops.token'
@@ -23,6 +24,7 @@ const loginMethod = ref(localStorage.getItem(METHOD_KEY) || '')
 
 const users = ref([]), adminForm = ref({email: '', display_name: '', role: 'viewer', tenant_id: ''})
 const tenants = ref([]), tenantForm = ref({name: '', slug: ''})
+const kbAction = ref(null), kbName = ref(''), kbConfirmation = ref('')
 const issuedToken = ref(''), adminBusy = ref(false)
 const showMembers = ref(false), members = ref([]), memberForm = ref({email: '', role: 'viewer'})
 const showReviews = ref(false), reviews = ref([]), reviewNote = ref('')
@@ -152,6 +154,35 @@ async function create() {
     const data = await api('/knowledge-bases', json({name: name.value.trim(), description: description.value}))
     await loadKB(); selected.value = data.id; showCreate.value = false; name.value = ''; description.value = ''
   } catch (e) { fail(e) } finally { creating.value = false }
+}
+function openKbAction(item, kind) {
+  kbAction.value = {id: item.id, name: item.name, kind}
+  kbName.value = item.name; kbConfirmation.value = ''; error.value = ''
+}
+async function submitKbAction() {
+  const target = kbAction.value
+  if (!target || adminBusy.value) return
+  adminBusy.value = true; error.value = ''
+  try {
+    if (target.kind === 'rename') {
+      await api(`/knowledge-bases/${target.id}`, {...json({name: kbName.value.trim()}), method: 'PATCH'})
+      notice.value = '知识库名称已更新。'
+    } else {
+      const result = await api(`/knowledge-bases/${target.id}`, {...json({confirm_name: kbConfirmation.value}), method: 'DELETE'})
+      const interrupted = asking.value && (unified.value || selected.value === target.id)
+      if (interrupted) generation++
+      const hasDeleted = c => c?.messages?.some(m => m.citations?.some(s => s.knowledge_base_id === target.id))
+      if (selected.value === target.id || (unified.value && hasDeleted({messages:messages.value}))) {
+        messages.value = []; question.value = ''
+      }
+      await loadKB(); await nextTick()
+      removeKnowledgeBaseConversations(conversations, target.id)
+      if (unified.value && hasDeleted({messages:messages.value})) { messages.value = []; question.value = '' }
+      persistConversations(true)
+      notice.value = (result.file_cleanup_pending ? '知识库已删除，部分上传文件仍待管理员回收。' : '知识库及关联数据已删除。') + (interrupted?'正在进行的问答已失效，请重新提问。':'')
+    }
+    await loadKB(); kbAction.value = null
+  } catch (e) { fail(e) } finally { adminBusy.value = false }
 }
 async function upload(event) {
   const file = event.target.files[0]
@@ -792,6 +823,8 @@ onUnmounted(() => clearInterval(timer))
                 <td><span class="badge">{{item.my_role||'—'}}</span></td>
                 <td><span class="badge" :class="{ready:item.review_required}">{{item.review_required?'已开启':'未开启'}}</span></td>
                 <td class="row-actions">
+                  <button class="text-button" :disabled="adminBusy" @click="openKbAction(item,'rename')">改名</button>
+                  <button class="text-button" :disabled="adminBusy" @click="openKbAction(item,'delete')">删除</button>
                   <button class="text-button" @click="openKb(item)">进入问答</button>
                   <button class="text-button" @click="manageKb(item)">资料与上传</button>
                   <button class="text-button" @click="selected=item.id; openMembers()">成员权限</button>
@@ -975,6 +1008,16 @@ onUnmounted(() => clearInterval(timer))
     </form>
   </div>
 
+  <div v-if="kbAction" class="overlay" @click.self="!adminBusy && (kbAction=null)">
+    <form class="modal" role="dialog" aria-modal="true" :aria-label="kbAction.kind==='rename'?'知识库改名':'删除知识库'" @submit.prevent="submitKbAction">
+      <div class="modal-heading"><h2>{{kbAction.kind==='rename'?'知识库改名':'删除知识库'}}</h2><button type="button" class="icon" :disabled="adminBusy" @click="kbAction=null" aria-label="关闭">×</button></div>
+      <template v-if="kbAction.kind==='rename'"><label>新名称<input v-model="kbName" maxlength="128" required aria-label="知识库新名称" :disabled="adminBusy"></label></template>
+      <template v-else><p>将永久删除「{{kbAction.name}}」及其文档、版本、切片、向量、成员关系和相关反馈，无法恢复。操作与历史审计将保留。</p><label>输入知识库完整名称确认<input v-model="kbConfirmation" maxlength="128" required aria-label="删除确认名称" :disabled="adminBusy" autocomplete="off"></label><p>解析或索引任务尚未结束时，请等待后重试。</p></template>
+      <p v-if="error" role="alert">{{error}}</p>
+      <button class="primary" :disabled="adminBusy || (kbAction.kind==='rename'?!kbName.trim():kbConfirmation!==kbAction.name)">{{adminBusy?'处理中…':kbAction.kind==='rename'?'保存名称':'确认永久删除'}}</button>
+      <button type="button" class="text-button" :disabled="adminBusy" @click="kbAction=null">取消</button>
+    </form>
+  </div>
   <div v-if="showMembers" class="overlay" @click.self="showMembers=false">
     <section role="dialog" aria-modal="true" aria-label="知识库成员权限" class="modal wide">
       <div class="modal-heading"><h2>成员权限 · {{kb?.name}}</h2><button type="button" class="icon" @click="showMembers=false" aria-label="关闭">×</button></div>
