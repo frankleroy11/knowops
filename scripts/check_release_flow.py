@@ -1,3 +1,7 @@
+# 中文导读：
+# 真实认证、上传、审核、索引、问答和清理验收，依赖 Worker 与模型服务
+# 使用临时数据并核对清理后的基线
+
 """Disposable live release regression against an AUTH_MODE=enforced development API.
 
 Runs real password login, ACL, upload/Celery/BGE-M3/Milvus, review, version

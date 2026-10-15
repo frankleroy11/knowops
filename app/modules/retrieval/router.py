@@ -1,3 +1,6 @@
+# 中文导读：
+# 检索与索引接口：先计算可访问的当前有效版本，再进行向量召回并复核数据库状态；可选重排在召回后执行
+
 import logging
 from typing import Literal
 
@@ -45,6 +48,7 @@ class Query(BaseModel):
         return self
 
 
+# 索引入队前检查状态，投递失败必须反馈失败，避免长期停留在索引中。
 @router.post("/document-versions/{version_id}/index", status_code=202)
 def enqueue_index(version_id: int, db: DB, principal: CurrentPrincipal):
     from app.workers.celery_app import index_document
@@ -108,6 +112,7 @@ def index_status(version_id: int, db: DB, principal: CurrentPrincipal):
     }
 
 
+# SQL 先确定当前、已批准且索引就绪的版本，Milvus 执行预过滤，返回后再次检查业务状态。
 def search(body: Query, db: Session, principal: Principal | None = None):
     """Authorized semantic search.
 

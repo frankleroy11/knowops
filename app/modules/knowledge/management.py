@@ -1,3 +1,7 @@
+# 中文导读：
+# 知识库整体删除：检查权限和运行中任务，先清理向量，再处理数据库和文件
+# 跨 MySQL、Milvus、磁盘的操作不是分布式原子事务
+
 """Administrator deletion: serialize writers, reject active jobs, then clean external data."""
 
 import logging
@@ -19,6 +23,7 @@ from app.modules.knowledge.models import (
 )
 
 
+# 先完成授权、加锁和忙碌状态检查，再清理外部向量、数据库记录与文件。跨存储失败需按结果排查。
 def delete_knowledge_base(db, principal, kb_id, confirmation, storage: LocalStorage):
     from app.modules.auth import service
 

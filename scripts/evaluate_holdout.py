@@ -1,3 +1,7 @@
+# 中文导读：
+# 运行预先冻结的数据集评测
+# 数据一旦被用于调试和方案选择，就不能继续把后续结果称为独立盲测
+
 """Prospectively frozen paired evaluation; no label edits or implicit retries."""
 
 import hashlib

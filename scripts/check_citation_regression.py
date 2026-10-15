@@ -1,3 +1,6 @@
+# 中文导读：
+# 使用冻结上下文回放引用校验，检查答案处理的开发回归；不能替代真实检索的端到端评测
+
 """Replay frozen contexts through the current answer pipeline; development regression only."""
 
 import hashlib

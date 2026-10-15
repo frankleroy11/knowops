@@ -1,3 +1,6 @@
+# 中文导读：
+# 相邻文本块扩展：围绕召回锚点补充同文档版本的上下文，并限制数量；扩展前仍需复核版本是否有权访问和可检索
+
 """Bounded adjacent context from the same indexed document version as trusted search hits."""
 
 from sqlalchemy import select, tuple_
@@ -14,6 +17,7 @@ from app.modules.knowledge.models import (
 MAX_CONTEXT_CHUNKS = 8
 
 
+# 保留召回锚点，并仅扩展同一授权版本内的邻块；数量上限避免提示词无限增长。
 def expand_neighbors(hits, db):
     anchors = hits[:MAX_CONTEXT_CHUNKS]
     if not anchors or len(anchors) >= MAX_CONTEXT_CHUNKS:

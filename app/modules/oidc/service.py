@@ -1,3 +1,7 @@
+# 中文导读：
+# OIDC 登录业务：消费一次性状态、校验身份并映射本地用户
+# 邮箱绑定与角色同步受明确条件限制，不能直接信任未验证的回调参数
+
 """OIDC login state, account linking/auto-provisioning and local token issuance."""
 
 import json
@@ -47,6 +51,7 @@ def create_login_state(db: Session, web: bool) -> OidcLoginState:
     return row
 
 
+# 消费一次性登录状态并核对有效期，防止同一授权回调被重复利用。
 def consume_login_state(db: Session, state: str) -> OidcLoginState:
     """Single use: a replayed or unknown state must never start a session."""
     row = db.get(OidcLoginState, state) if state else None
@@ -149,6 +154,7 @@ def sync_role(db: Session, user: User, settings, claims) -> None:
     audit.record(db, user, "user.oidc.role", "user", user.id, f"role={mapped}")
 
 
+# 把已验证的外部身份映射为本地账号，按配置决定邮箱绑定和角色同步。
 def map_user(db: Session, claims) -> User:
     """Link an existing account or provision one, never silently merging identities."""
     settings = get_settings()

@@ -1,3 +1,7 @@
+# 中文导读：
+# 首次创建平台管理员并将生成凭据写入受限本地文件；已有管理员时不重置密码
+# 凭据文件不能提交或公开
+
 """Create the first local platform administrator without printing credentials."""
 
 import json

@@ -1,3 +1,7 @@
+# 中文导读：
+# 依赖与任务探测：并发检查数据库、缓存、向量库和 Worker
+# 任务繁忙导致探测超时不能直接断言 Worker 已离线
+
 """Read-only, bounded dependency probes; never return provider error details."""
 
 from concurrent.futures import ThreadPoolExecutor
@@ -38,6 +42,7 @@ def probe_milvus():
     return {"status": "ok", "detail": "向量库连通；未执行嵌入或检索"}
 
 
+# 检查 Worker 响应与任务注册情况；繁忙或超时属于不确定状态，不能直接认定进程不存在。
 def probe_worker():
     replies = celery_app.control.inspect(timeout=2).registered() or {}
     required = {"knowops.ingest_document", "knowops.index_document"}
@@ -78,6 +83,7 @@ def measured(probe):
     return {**result, "latency_ms": round((perf_counter() - started) * 1000)}
 
 
+# 汇总各依赖探测结果；独立探测失败不应隐藏其他服务的状态。
 def snapshot():
     probes = {
         "mysql": probe_mysql,

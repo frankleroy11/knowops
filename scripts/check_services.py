@@ -1,3 +1,7 @@
+# 中文导读：
+# 基础服务读写冒烟检查；顶层代码会执行外部操作，不应作为普通库导入
+# 基础服务通过不代表完整问答通过
+
 """Development smoke checks. Uses disposable data and cleans up after itself."""
 
 import sys

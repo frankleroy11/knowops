@@ -1,3 +1,7 @@
+# 中文导读：
+# 知识库、文档、版本、文本块和向量索引状态的数据模型
+# 文档当前版本与版本的解析、审核、索引状态共同决定能否被检索
+
 from datetime import datetime
 
 from sqlalchemy import (

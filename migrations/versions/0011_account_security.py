@@ -1,3 +1,7 @@
+# 中文导读：
+# 数据库迁移：密码历史、重置、登录尝试与二次验证
+# upgrade 应用本次结构变更；downgrade 回退结构可能丢失对应字段或表中的数据，执行前需备份
+
 """Account security: password history, self-service reset, per-IP throttling and TOTP."""
 
 import sqlalchemy as sa

@@ -1,3 +1,6 @@
+# 中文导读：
+# 以临时租户和成员验证公开注册、权限及令牌撤销，涉及真实数据库；清理操作仅限脚本记录的测试对象
+
 """Real MySQL account acceptance via HTTP TestClient; prepares disposable UI accounts.
 
 No mocks/dependency overrides. Does not alter existing accounts or credentials.

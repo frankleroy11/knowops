@@ -1,3 +1,6 @@
+# 中文导读：
+# 单文档删除与加锁操作：统一锁顺序并拒绝删除处理中的文档；按文档标识清理向量，避免误删整个向量集合
+
 """Document lifecycle operations with KB -> version locking order."""
 
 import logging
@@ -29,6 +32,7 @@ def locked_document(db, principal, document_id, *, admin=False):
     return document, kb
 
 
+# 删除前核对确认名称并拒绝运行中的任务；保留审计与反馈快照供事后追溯。
 def delete_document(db, principal, document_id, confirmation, storage):
     document, kb = locked_document(db, principal, document_id, admin=True)
     if confirmation != document.filename:

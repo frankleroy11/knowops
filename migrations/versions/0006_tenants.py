@@ -1,3 +1,7 @@
+# 中文导读：
+# 数据库迁移：租户隔离
+# upgrade 应用本次结构变更；downgrade 回退结构可能丢失对应字段或表中的数据，执行前需备份
+
 """Tenants: every knowledge base and user belongs to one organization.
 
 NULL `users.tenant_id` marks a platform-level account that may administer all

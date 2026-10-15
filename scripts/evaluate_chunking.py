@@ -1,3 +1,6 @@
+# 中文导读：
+# 对固定窗口和结构切分做成对实验，使用真实解析、编码及问答后清理临时数据；样本少且已用于开发
+
 """Paired synthetic development comparison; two enforced APIs differing only in CHUNK_STRATEGY.
 
 Requires a running real Worker and BGE-M3/Milvus/Qwen. Temporary tenant data is

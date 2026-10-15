@@ -1,3 +1,7 @@
+# 中文导读：
+# Celery 配置及解析、索引任务入口
+# 任务可能重复投递，业务层需保持幂等；修改 Worker 代码后必须重启 Worker，API 热重载不会重启它
+
 from celery import Celery
 from sqlalchemy.exc import OperationalError
 

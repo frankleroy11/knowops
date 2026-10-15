@@ -1,3 +1,7 @@
+# 中文导读：
+# 安全基础工具：令牌摘要、密码散列和 TOTP 校验
+# 数据库保存验证所需的摘要信息，原始访问令牌只应在签发时交付
+
 """API token and password hashing.
 
 Tokens are high-entropy random strings, never user-chosen passwords, so a plain
@@ -23,6 +27,7 @@ def generate_token() -> str:
     return TOKEN_PREFIX + secrets.token_urlsafe(32)
 
 
+# 访问令牌以摘要形式入库，泄露数据库摘要不应直接得到可用的原始令牌。
 def hash_token(raw: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
@@ -49,6 +54,7 @@ def hash_password(password: str) -> str:
     return f"scrypt${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${_b64(salt)}${_b64(digest)}"
 
 
+# 使用保存的散列参数验证密码，不把明文密码与数据库字段直接比较。
 def verify_password(password: str, stored: str | None) -> bool:
     if not stored:
         return False
@@ -93,6 +99,7 @@ def totp_code(secret: str, at: int | None = None) -> str:
     return str(binary % (10**TOTP_DIGITS)).zfill(TOTP_DIGITS)
 
 
+# 按允许的时间窗口核验动态验证码，处理客户端与服务端的小幅时钟偏差。
 def verify_totp(secret: str | None, code: str, window: int = 1, at: int | None = None) -> bool:
     """允许前后 window 个时间步，避免客户端时钟轻微偏差导致登录失败。"""
     if not secret or not code:

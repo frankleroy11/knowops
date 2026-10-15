@@ -1,3 +1,6 @@
+# 中文导读：
+# 调用真实上传和检索接口验证向量链路，会保留示例数据；需要 Worker 与 Milvus 可用
+
 """Real HTTP/Worker/Milvus verification; retains the indexed demo version."""
 
 import sys

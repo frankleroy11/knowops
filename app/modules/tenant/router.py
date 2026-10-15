@@ -1,3 +1,6 @@
+# 中文导读：
+# 租户管理接口：平台管理员创建和查看租户，租户管理员的账号管理权限不自动扩展为平台管理权限
+
 """Tenant administration (platform administrators only)."""
 
 from fastapi import APIRouter, HTTPException

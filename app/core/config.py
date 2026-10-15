@@ -1,3 +1,7 @@
+# 中文导读：
+# 集中读取环境配置并缓存设置对象
+# 认证、公开注册和模型参数均在这里定义；本地环境文件中的密钥不应提交到仓库
+
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal

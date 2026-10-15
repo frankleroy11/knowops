@@ -1,3 +1,6 @@
+# 中文导读：
+# 在固定证据上下文中诊断拒答与摘录匹配，输出用于排错，不自动更改标准答案
+
 """Bounded, secret-free diagnosis of model refusals on frozen context.
 
 Replays the exact sources payload that a stored run already sent to Qwen

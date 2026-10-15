@@ -1,3 +1,7 @@
+# 中文导读：
+# 统一问答链路：授权检索、可选相邻块扩展、模型生成、逐条引用校验
+# 证据不足或输出无法校验时拒答；原文匹配本身不证明语义支持
+
 from time import perf_counter
 from typing import Literal
 
@@ -57,6 +61,7 @@ class ModelAnswer(BaseModel):
     unanswered_questions: list[str] = Field(max_length=20)
 
 
+# 统一构造拒答结果，让前端能够区分证据不足与正常回答。
 def refuse(reason):
     return {
         "answer": REFUSAL,
@@ -67,11 +72,13 @@ def refuse(reason):
     }
 
 
+# 统一摘录格式用于原文匹配；这一步只核验文本存在，不判断结论是否被语义支持。
 def normalize_quote(text):
     # Permit whitespace layout differences only, not fuzzy matches or omitted words.
     return " ".join(text.split())
 
 
+# 将召回证据交给模型后逐条验证来源与摘录；任一必要校验失败时走拒答路径。
 def answer_question(body: AskRequest, hits: list[dict]):
     selected = hits[: MAX_CONTEXT_CHUNKS if body.expand_context else body.top_k]
     sources = [

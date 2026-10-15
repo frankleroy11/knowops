@@ -1,3 +1,7 @@
+# 中文导读：
+# 备份 MySQL 与本地文件并生成校验信息
+# 执行前需停止写入者；停止写入参数是操作者声明，不会自动停止服务，备份不包含 Milvus
+
 """Offline application backup: MySQL authority + original uploads.
 
 Stop API and KnowOps workers before invoking --writers-stopped. Milvus is derived

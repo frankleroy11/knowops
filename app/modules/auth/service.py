@@ -1,3 +1,7 @@
+# 中文导读：
+# 身份认证与权限业务：解析令牌、检查租户和知识库访问范围、维护密码及二次验证
+# 授权必须在后端执行，令牌还需检查有效期与撤销状态
+
 """Authorization rules: who may read or write which knowledge base.
 
 `AUTH_MODE=off` keeps the historical single-user behaviour: every request is the

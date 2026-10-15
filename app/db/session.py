@@ -1,3 +1,7 @@
+# 中文导读：
+# SQLAlchemy 基础模型、连接池与会话工厂
+# 数据库连接被多个业务模块复用，具体事务边界由调用方管理
+
 from sqlalchemy import URL, create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 

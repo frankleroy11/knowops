@@ -1,3 +1,7 @@
+# 中文导读：
+# 向量编码接口与归一化工具
+# 检索和入库必须使用同一套编码约定，否则相似度不可比较
+
 """Embedding 适配器契约。
 
 稳定的对外契约只有三件事：模型标识 model_name、向量维度 dim、归一化策略 normalized。
@@ -27,6 +31,7 @@ class Embedder(Protocol):
         ...
 
 
+# 统一向量长度，使入库与查询遵循相同的归一化约定。
 def l2_normalize(vector: Sequence[float]) -> list[float]:
     """L2 归一化；零向量原样返回，避免除零。"""
     norm = sum(float(value) * float(value) for value in vector) ** 0.5

@@ -1,3 +1,7 @@
+# 中文导读：
+# Alembic 迁移环境：导入业务模型注册元数据，分别支持离线生成 SQL 和在线执行迁移
+# 迁移前应确认目标数据库
+
 from alembic import context
 
 from app.db.session import Base, engine

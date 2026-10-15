@@ -1,3 +1,7 @@
+# 中文导读：
+# 提交与管理问答反馈
+# 管理查询按租户及角色限定范围；用户反馈是待审查材料，不能自动当作评测标准答案
+
 """Answer feedback endpoints.
 
 Any authenticated caller may rate an answer. Reading the collected feedback is an

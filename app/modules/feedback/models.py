@@ -1,3 +1,7 @@
+# 中文导读：
+# 问答反馈快照：保留提问、回答与证据上下文，便于后续复盘
+# 快照不依赖被引用文档持续存在
+
 """Answer feedback: the online half of the evaluation loop.
 
 Scripted evaluations (`evals/`, `scripts/evaluate_*.py`) measure retrieval and

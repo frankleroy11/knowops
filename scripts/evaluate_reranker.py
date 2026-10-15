@@ -1,3 +1,6 @@
+# 中文导读：
+# 在相同候选池上比较排序策略，避免把召回候选差异误计为重排收益
+
 """Paired dev-only comparison: one candidate pool, one scoring pass, three selectors."""
 
 import hashlib

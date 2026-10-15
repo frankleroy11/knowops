@@ -1,3 +1,6 @@
+# 中文导读：
+# 租户查询与创建业务，集中维护默认租户和唯一标识查找，供账号及知识库流程复用
+
 """Tenant lookup and administration helpers."""
 
 from fastapi import HTTPException

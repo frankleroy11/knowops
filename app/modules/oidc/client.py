@@ -1,3 +1,7 @@
+# 中文导读：
+# OIDC 服务端通信：读取发现文档、交换授权码并缓存公钥
+# 公钥轮换时需要刷新缓存，网络错误不能降级为跳过签名验证
+
 """OIDC discovery, JWKS fetch (with cache) and authorization-code exchange."""
 
 import time

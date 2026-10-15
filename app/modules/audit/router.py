@@ -1,3 +1,6 @@
+# 中文导读：
+# 审计查询与导出接口：先确定管理员可见的租户范围，再查询日志，避免跨租户读取操作记录
+
 """Audit trail access, partitioned by tenant."""
 
 import csv

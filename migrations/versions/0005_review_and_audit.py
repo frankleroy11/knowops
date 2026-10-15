@@ -1,3 +1,7 @@
+# 中文导读：
+# 数据库迁移：审核状态与审计记录
+# upgrade 应用本次结构变更；downgrade 回退结构可能丢失对应字段或表中的数据，执行前需备份
+
 """Per-KB review workflow, version publish state and audit trail."""
 
 import sqlalchemy as sa

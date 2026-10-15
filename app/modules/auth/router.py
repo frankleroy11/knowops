@@ -1,3 +1,7 @@
+# 中文导读：
+# 登录、注册、密码和成员管理接口
+# 请求模型负责输入约束，业务层负责权限与事务；公开注册是否开放由配置决定
+
 """Current-identity endpoint and administrator user management."""
 
 import re

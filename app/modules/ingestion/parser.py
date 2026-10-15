@@ -1,3 +1,7 @@
+# 中文导读：
+# 文档解析入口：读取文本或 PDF，再按版本切分策略生成块
+# 扫描件没有可提取文本时会失败，目前不能视为已实现 OCR
+
 """Deterministic fixed/structure-aware splitting; preserve PDF page provenance."""
 
 from pathlib import Path

@@ -1,3 +1,7 @@
+# 中文导读：
+# 请求级数据库会话依赖：为接口提供会话并在请求结束时关闭
+# 事务提交由业务层决定，不能把会话关闭当成提交成功
+
 """Shared FastAPI dependencies.
 
 `get_db` lives here so that every router (auth included) depends on the same

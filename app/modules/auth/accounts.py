@@ -1,3 +1,6 @@
+# 中文导读：
+# 注册与账号变更业务：公开注册创建独立租户；成员变更需检查租户范围、自身操作限制和最后一名管理员约束
+
 """Public demo registration and transactional account administration."""
 
 from datetime import datetime

@@ -1,3 +1,7 @@
+# 中文导读：
+# 数据库迁移：OIDC 身份与登录状态
+# upgrade 应用本次结构变更；downgrade 回退结构可能丢失对应字段或表中的数据，执行前需备份
+
 """OIDC single sign-on: login state, ID-token verification and account mapping."""
 
 import sqlalchemy as sa

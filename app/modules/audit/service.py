@@ -1,3 +1,7 @@
+# 中文导读：
+# 审计记录与保留期清理
+# record 会提交当前数据库事务，因此调用前必须完成业务校验，并把需要原子提交的变更放在同一会话中
+
 """Write and read the audit trail.
 
 `record` commits on its own so a successful business action is never left
@@ -54,6 +58,7 @@ def _tenant_of_object(db: Session, object_type: str, object_id: int | None) -> i
     return None
 
 
+# 审计与当前业务修改一起提交；调用者不能在此之后再补做会导致操作失败的关键校验。
 def record(
     db: Session,
     actor,
@@ -102,6 +107,7 @@ def list_entries(
     return list(db.scalars(query.offset(max(0, offset)).limit(min(max(1, limit), max_limit))))
 
 
+# 按截止时间清理日志，调用方负责选择预览或实际删除以及权限范围。
 def prune(db: Session, before: datetime) -> int:
     """删除 `before` 之前的审计记录（保留策略由调用方决定天数）。"""
     result = db.execute(delete(AuditLog).where(AuditLog.created_at < before))
