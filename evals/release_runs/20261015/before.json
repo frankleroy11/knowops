@@ -1,0 +1,176 @@
+{
+  "run": "release-4f2459c0d886",
+  "kind": "synthetic development regression",
+  "checks": [
+    "real_password_login_all_roles",
+    "platform_tenant_editor_viewer_and_cross_tenant_acl",
+    "real_upload_parse_embed_index_review_version_switch",
+    "failure_location_acl_retry_and_repaired_new_version",
+    "real_qwen_unified_qa_citations_and_feedback",
+    "real_document_delete_all_versions_vectors_files_and_neighbor_preservation"
+  ],
+  "questions": [
+    {
+      "question": "白鹭验收计划午餐报销每天上限多少元？",
+      "expected_keyword": "128",
+      "passed_heuristic": true,
+      "citations_in_scope": true,
+      "http_total_ms": 15166.63,
+      "response": {
+        "answer": "白鹭验收计划午餐报销每天上限为128元。",
+        "answerable": true,
+        "claims": [
+          {
+            "text": "白鹭验收计划午餐报销每天上限为128元。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+              }
+            ]
+          }
+        ],
+        "source_id_corrections": [],
+        "grounding_status": "quotes_validated",
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 774,
+            "score": 0.8880012631416321,
+            "document_id": 243,
+            "knowledge_base_id": 32,
+            "knowledge_base_name": "release-4f2459c0d886",
+            "filename": "午餐制度.txt",
+            "version_id": 247,
+            "position": 0,
+            "page": null,
+            "content": "白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+          }
+        ],
+        "context_chunk_count": 2,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 11922.25,
+          "generation": 3223.77,
+          "total": 15146.02
+        }
+      }
+    },
+    {
+      "question": "白鹭验收计划报销必须提交什么凭证？",
+      "expected_keyword": "电子发票",
+      "passed_heuristic": false,
+      "citations_in_scope": true,
+      "http_total_ms": 2302.55,
+      "response": {
+        "answer": "现有知识库资料不足，无法回答这个问题。",
+        "answerable": false,
+        "citations": [],
+        "claims": [],
+        "grounding_status": "model_refused",
+        "context_chunk_count": 2,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 978.46,
+          "generation": 1297.38,
+          "total": 2275.84
+        }
+      }
+    },
+    {
+      "question": "白鹭验收计划 VPN 使用哪个 TCP 端口？",
+      "expected_keyword": "443",
+      "passed_heuristic": true,
+      "citations_in_scope": true,
+      "http_total_ms": 4300.82,
+      "response": {
+        "answer": "白鹭验收计划 VPN 使用 TCP 443 端口。",
+        "answerable": true,
+        "claims": [
+          {
+            "text": "白鹭验收计划 VPN 使用 TCP 443 端口。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "白鹭验收计划的 VPN 服务使用 TCP 443 端口，连接时需要公司账号和动态验证码。"
+              }
+            ]
+          }
+        ],
+        "source_id_corrections": [],
+        "grounding_status": "quotes_validated",
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 775,
+            "score": 0.8426200747489929,
+            "document_id": 244,
+            "knowledge_base_id": 32,
+            "knowledge_base_name": "release-4f2459c0d886",
+            "filename": "VPN说明.txt",
+            "version_id": 248,
+            "position": 0,
+            "page": null,
+            "content": "白鹭验收计划的 VPN 服务使用 TCP 443 端口，连接时需要公司账号和动态验证码。"
+          }
+        ],
+        "context_chunk_count": 3,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 1334.62,
+          "generation": 2943.87,
+          "total": 4278.49
+        }
+      }
+    },
+    {
+      "question": "白鹭验收计划年终奖金是多少？",
+      "expected_keyword": null,
+      "passed_heuristic": true,
+      "citations_in_scope": true,
+      "http_total_ms": 1838.96,
+      "response": {
+        "answer": "现有知识库资料不足，无法回答这个问题。",
+        "answerable": false,
+        "citations": [],
+        "claims": [],
+        "grounding_status": "model_refused",
+        "context_chunk_count": 2,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 782.5,
+          "generation": 1031.66,
+          "total": 1814.16
+        }
+      }
+    },
+    {
+      "question": "白鹭验收计划午餐上限和年终奖金分别是多少？",
+      "expected_keyword": null,
+      "passed_heuristic": true,
+      "citations_in_scope": true,
+      "http_total_ms": 2155.96,
+      "response": {
+        "answer": "现有知识库资料不足，无法回答这个问题。",
+        "answerable": false,
+        "citations": [],
+        "claims": [],
+        "grounding_status": "model_refused",
+        "context_chunk_count": 2,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 930.62,
+          "generation": 1198.23,
+          "total": 2128.85
+        }
+      }
+    }
+  ],
+  "summary": {
+    "questions": 5,
+    "heuristic_passed": 4,
+    "citation_scope_passed": 5,
+    "semantic_human_review": "required; exact quote validation is not semantic proof"
+  },
+  "baseline_restored": true
+}

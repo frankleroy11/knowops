@@ -116,7 +116,7 @@ def run_search(client, name, kb_id, chunk_ids):
     from app.modules.retrieval import router as retrieval
 
     class Store:
-        def search(self, vector, kb, limit):
+        def search(self, vector, kb, limit, **kwargs):
             return [{"chunk_id": c, "distance": 0.9 - i / 100} for i, c in enumerate(chunk_ids)]
 
         def close(self):

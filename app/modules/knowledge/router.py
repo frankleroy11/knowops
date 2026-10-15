@@ -13,6 +13,7 @@ from app.adapters.storage import (
     StoredFile,
     UnsupportedFormat,
 )
+from app.adapters.vectorstore.milvus import collection_name
 from app.core.config import ROOT
 from app.db.deps import DB, get_db  # noqa: F401 - re-exported for existing imports
 from app.modules.audit import service as audit
@@ -20,7 +21,13 @@ from app.modules.auth import service
 from app.modules.auth.deps import CurrentPrincipal
 from app.modules.auth.principal import Principal
 from app.modules.knowledge import review
-from app.modules.knowledge.models import Chunk, Document, DocumentVersion, KnowledgeBase
+from app.modules.knowledge.models import (
+    Chunk,
+    Document,
+    DocumentVersion,
+    KnowledgeBase,
+    VectorIndex,
+)
 from app.modules.tenant import service as tenants
 from app.workers.celery_app import ingest_document
 
@@ -196,11 +203,14 @@ def list_kbs(db: DB, principal: CurrentPrincipal, limit: int = 50, offset: int =
     ]
 
 
-def dispatch(version):
+def dispatch(version, db=None):
     try:
         task = ingest_document.delay(version.id)
         return {"queued": True, "task_id": task.id}
-    except Exception:  # noqa: BLE001 - persist pending state if broker is unavailable
+    except Exception:  # noqa: BLE001 - retain a retryable state on broker failure
+        if db is not None:
+            version.status, version.error = "failed", "任务未入队，请重试解析"
+            db.commit()
         return {"queued": False, "task_id": None}
 
 
@@ -246,7 +256,7 @@ def upload(kb_id: int, file: UploadFile, db: DB, principal: CurrentPrincipal):
         doc.id,
         f"kb={kb_id} filename={stored.filename} review={status}",
     )
-    queue = dispatch(version)
+    queue = dispatch(version, db)
     return {
         "document_id": doc.id,
         "version_id": version.id,
@@ -264,6 +274,11 @@ def upload_version(document_id: int, file: UploadFile, db: DB, principal: Curren
     if doc is None:
         raise HTTPException(404, "文档不存在")
     kb = service.require_kb(db, principal, doc.knowledge_base_id, "write")
+    doc = db.scalar(
+        select(Document).where(Document.id == document_id).execution_options(populate_existing=True)
+    )
+    if doc is None:
+        raise HTTPException(404, "文档不存在")
     stored = store_upload(file)
     latest = (
         db.scalar(
@@ -289,7 +304,7 @@ def upload_version(document_id: int, file: UploadFile, db: DB, principal: Curren
         doc.id,
         f"version={version.version} filename={stored.filename} review={status}",
     )
-    queue = dispatch(version)
+    queue = dispatch(version, db)
     return {
         "document_id": doc.id,
         "version_id": version.id,
@@ -375,9 +390,27 @@ def retry(version_id: int, db: DB, principal: CurrentPrincipal):
     if document is None:
         raise HTTPException(404, "文档不存在")
     service.require_kb(db, principal, document.knowledge_base_id, "write")
-    if version.status == "parsed":
-        raise HTTPException(409, "该版本已经解析完成")
-    return {"version_id": version_id, **dispatch(version)}
+    version = db.scalar(
+        select(DocumentVersion)
+        .where(DocumentVersion.id == version_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if version is None:
+        raise HTTPException(404, "版本不存在")
+    if version.status != "failed":
+        raise HTTPException(409, "仅可重试解析失败的版本，等待中的任务请勿重复投递")
+    version.status = "pending"
+    db.commit()
+    result = dispatch(version, db)
+    if not result["queued"]:
+        version.status = "failed"
+        db.commit()
+        raise HTTPException(503, "任务队列不可用，失败状态已保留，请稍后重试")
+    audit.record(
+        db, principal, "version.retry", "document_version", version_id, f"document={document.id}"
+    )
+    return {"version_id": version_id, **result}
 
 
 def documents(
@@ -509,3 +542,132 @@ def review_version(version_id: int, body: ReviewIn, db: DB, principal: CurrentPr
         "review_status": version.review_status,
         "is_current": version.is_current,
     }
+
+
+class DocumentDelete(BaseModel):
+    confirm_filename: str = Field(min_length=1, max_length=255)
+
+
+@router.delete("/documents/{document_id}")
+def delete_document(document_id: int, body: DocumentDelete, db: DB, principal: CurrentPrincipal):
+    from app.modules.knowledge import operations
+
+    try:
+        return operations.delete_document(
+            db, principal, document_id, body.confirm_filename, storage_backend()
+        )
+    except StorageError:
+        raise HTTPException(409, "存储路径异常，已阻止删除") from None
+
+
+@router.get("/documents/{document_id}/versions")
+def document_versions(document_id: int, db: DB, principal: CurrentPrincipal):
+    doc = db.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(404, "文档不存在")
+    service.require_kb(db, principal, doc.knowledge_base_id, "read")
+    rows = db.execute(
+        select(DocumentVersion, VectorIndex)
+        .outerjoin(
+            VectorIndex,
+            (VectorIndex.version_id == DocumentVersion.id)
+            & (VectorIndex.collection == collection_name()),
+        )
+        .where(DocumentVersion.document_id == document_id)
+        .order_by(DocumentVersion.version.desc())
+    ).all()
+    return [
+        {
+            "version_id": v.id,
+            "version": v.version,
+            "status": v.status,
+            "error": v.error,
+            "review_status": v.review_status,
+            "is_current": v.is_current,
+            "index_status": i.status if i else "pending",
+            "index_error": i.error if i else None,
+        }
+        for v, i in rows
+    ]
+
+
+@router.post("/document-versions/{version_id}/publish")
+def publish_version(version_id: int, db: DB, principal: CurrentPrincipal):
+    from app.modules.knowledge.operations import locked_document
+
+    v = review.load_version(db, version_id)
+    doc, kb = locked_document(db, principal, v.document_id)
+    v = db.scalar(
+        select(DocumentVersion)
+        .where(DocumentVersion.id == version_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if v is None:
+        raise HTTPException(404, "版本不存在")
+    index = db.scalar(
+        select(VectorIndex).where(
+            VectorIndex.version_id == version_id, VectorIndex.collection == collection_name()
+        )
+    )
+    if (
+        v.status != "parsed"
+        or not index
+        or index.status != "indexed"
+        or v.review_status != "approved"
+    ):
+        raise HTTPException(409, "仅可发布已解析、已索引且审核通过的版本")
+    # Publish and its audit must commit together.
+    for other in db.scalars(select(DocumentVersion).where(DocumentVersion.document_id == doc.id)):
+        other.is_current = other.id == version_id
+    doc.retired_at = None
+    audit.record(
+        db,
+        principal,
+        "version.publish",
+        "document_version",
+        version_id,
+        f"document={doc.id} version={v.version}",
+        tenant_id=kb.tenant_id,
+    )
+    return {"version_id": v.id, "is_current": True}
+
+
+@router.get("/admin/document-failures")
+def document_failures(db: DB, principal: CurrentPrincipal, limit: int = 50, offset: int = 0):
+    service.require_admin(principal)
+    scope = service.authorized_kb_ids(db, principal)
+    from sqlalchemy import or_
+
+    rows = db.execute(
+        select(DocumentVersion, Document, KnowledgeBase, VectorIndex)
+        .join(Document, Document.id == DocumentVersion.document_id)
+        .join(KnowledgeBase, KnowledgeBase.id == Document.knowledge_base_id)
+        .outerjoin(
+            VectorIndex,
+            (VectorIndex.version_id == DocumentVersion.id)
+            & (VectorIndex.collection == collection_name()),
+        )
+        .where(
+            KnowledgeBase.id.in_(scope),
+            or_(DocumentVersion.status == "failed", VectorIndex.status == "failed"),
+        )
+        .order_by(DocumentVersion.id.desc())
+        .offset(max(0, offset))
+        .limit(min(max(limit, 1), 100))
+    ).all()
+    return [
+        {
+            "id": d.id,
+            "version_id": v.id,
+            "version": v.version,
+            "filename": d.filename,
+            "knowledge_base_id": kb.id,
+            "knowledge_base_name": kb.name,
+            "status": v.status,
+            "index_status": i.status if i else "pending",
+            "stage": "parse" if v.status == "failed" else "index",
+            "error": v.error if v.status == "failed" else i.error,
+        }
+        for v, d, kb, i in rows
+    ]

@@ -55,7 +55,7 @@ class MilvusStore:
     def upsert(self, rows):
         self.client.upsert(self.name, rows)
 
-    def search(self, vector, kb_id, limit):
+    def search(self, vector, kb_id, limit, *, version_ids=None):
         if not self.client.has_collection(self.name):
             return []
         if isinstance(kb_id, list):
@@ -64,6 +64,10 @@ class MilvusStore:
             expression = "knowledge_base_id in [" + ",".join(str(int(i)) for i in kb_id) + "]"
         else:
             expression = f"knowledge_base_id == {int(kb_id)}"
+        if version_ids is not None:
+            if not version_ids:
+                return []
+            expression += " and version_id in [" + ",".join(str(int(i)) for i in version_ids) + "]"
         return self.client.search(
             self.name,
             [vector],
@@ -76,6 +80,11 @@ class MilvusStore:
         name = collection or self.name
         if self.client.has_collection(name):
             self.client.delete(name, filter=f"knowledge_base_id == {int(kb_id)}")
+
+    def delete_document(self, document_id, collection=None):
+        name = collection or self.name
+        if self.client.has_collection(name):
+            self.client.delete(name, filter=f"document_id == {int(document_id)}")
 
     def close(self):
         self.client.close()

@@ -118,7 +118,7 @@ class Store:
     def __init__(self, seen):
         self.seen = seen
 
-    def search(self, vector, kb_id, limit):
+    def search(self, vector, kb_id, limit, **kwargs):
         self.seen["kb_id"] = kb_id
         return [{"chunk_id": 1, "distance": 0.9}, {"chunk_id": 2, "distance": 0.8}]
 
