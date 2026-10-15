@@ -122,7 +122,7 @@ def run_search(client, name, scope=None, kb_id=None):
     from app.modules.retrieval import router as retrieval
 
     class Store:
-        def search(self, vector, kb, limit):
+        def search(self, vector, kb, limit, **kwargs):
             return [{"chunk_id": 1, "distance": 0.9}, {"chunk_id": 2, "distance": 0.8}]
 
         def close(self):

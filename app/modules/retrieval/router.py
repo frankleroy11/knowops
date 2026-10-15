@@ -56,12 +56,32 @@ def enqueue_index(version_id: int, db: DB, principal: CurrentPrincipal):
     if document is None:
         raise HTTPException(404, "文档不存在")
     service.require_kb(db, principal, document.knowledge_base_id, "write")
-    if version.status != "parsed":
+    version = db.scalar(
+        select(DocumentVersion)
+        .where(DocumentVersion.id == version_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if version is None or version.status != "parsed":
         raise HTTPException(409, "请先完成解析")
+    job = db.scalar(
+        select(VectorIndex)
+        .where(VectorIndex.version_id == version_id, VectorIndex.collection == collection_name())
+        .with_for_update()
+    )
+    if job and job.status in {"indexing", "indexed"}:
+        raise HTTPException(409, "索引正在处理或已经完成，请勿重复投递")
+    if job is None:
+        job = VectorIndex(version_id=version_id, collection=collection_name())
+        db.add(job)
+    job.status, job.error = "indexing", None
+    db.commit()
     try:
         task = index_document.delay(version_id)
         return {"version_id": version_id, "queued": True, "task_id": task.id}
     except Exception:  # noqa: BLE001 - sanitize external service failures
+        job.status, job.error = "failed", "任务未入队，请重试索引"
+        db.commit()
         raise HTTPException(503, "任务队列不可用，请重试") from None
 
 
@@ -111,6 +131,30 @@ def search(body: Query, db: Session, principal: Principal | None = None):
             "reranked": body.rerank,
             "hits": [],
         }
+    eligible_versions = list(
+        db.scalars(
+            select(DocumentVersion.id)
+            .join(Document, DocumentVersion.document_id == Document.id)
+            .join(VectorIndex, VectorIndex.version_id == DocumentVersion.id)
+            .where(
+                Document.knowledge_base_id.in_(kb_ids),
+                Document.retired_at.is_(None),
+                DocumentVersion.status == "parsed",
+                DocumentVersion.is_current.is_(True),
+                DocumentVersion.review_status == "approved",
+                VectorIndex.collection == collection_name(),
+                VectorIndex.status == "indexed",
+            )
+        )
+    )
+    if not eligible_versions:
+        return {
+            "query": body.query,
+            "collection": collection_name(),
+            "scope": body.scope,
+            "reranked": body.rerank,
+            "hits": [],
+        }
     store = None
     try:
         vector = get_embedder().encode([body.query], is_query=True)[0]
@@ -119,6 +163,7 @@ def search(body: Query, db: Session, principal: Principal | None = None):
             vector,
             kb_ids if body.scope == "all" else body.knowledge_base_id,
             body.candidate_k if body.rerank else body.top_k,
+            version_ids=eligible_versions,
         )
         results = []
         for hit in hits:

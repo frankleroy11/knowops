@@ -29,6 +29,44 @@ const issuedToken = ref(''), adminBusy = ref(false)
 const showMembers = ref(false), members = ref([]), memberForm = ref({email: '', role: 'viewer'})
 const showReviews = ref(false), reviews = ref([]), reviewNote = ref('')
 const auditLogs = ref([]), auditTenant = ref('')
+const failures = ref([]), failurePage = ref(0)
+const versionDoc = ref(null), versions = ref([]), deleteDoc = ref(null), deleteDocName = ref('')
+async function exportAudit() {
+  adminBusy.value = true
+  try {
+    const query = auditTenant.value === '' ? '' : '?tenant_id='+auditTenant.value
+    const response = await fetch('/api/v1/admin/audit-logs/export'+query, {headers:token.value?{Authorization:'Bearer '+token.value}:{}})
+    if (!response.ok) throw new Error('导出失败，请确认登录与权限')
+    const url = URL.createObjectURL(await response.blob())
+    const link = document.createElement('a'); link.href = url; link.download = 'knowops-audit.csv'; link.click()
+    setTimeout(()=>URL.revokeObjectURL(url),1000)
+  } catch (e) { fail(e) } finally { adminBusy.value = false }
+}
+async function loadFailures() {
+  adminBusy.value = true
+  try { failures.value = await api(`/admin/document-failures?offset=${failurePage.value*50}`) } catch (e) { fail(e) } finally { adminBusy.value = false }
+}
+async function openFailure(d) {
+  const item = kbs.value.find(k=>k.id===d.knowledge_base_id)
+  if (item) await manageKb(item)
+}
+async function openVersions(d) {
+  versionDoc.value = d; versions.value = []; adminBusy.value = true
+  try { versions.value = await api(`/documents/${d.id}/versions`) } catch (e) { fail(e) } finally { adminBusy.value = false }
+}
+async function publishVersion(v) {
+  adminBusy.value = true
+  try { await api(`/document-versions/${v.version_id}/publish`, {method:'POST'}); await openVersions(versionDoc.value); await loadDocs(); notice.value = '有效版本已切换。' } catch (e) { fail(e) } finally { adminBusy.value = false }
+}
+async function confirmDeleteDoc() {
+  adminBusy.value = true
+  try {
+    const result = await api(`/documents/${deleteDoc.value.id}`, {...json({confirm_filename:deleteDocName.value}),method:'DELETE'})
+    removeKnowledgeBaseConversations(conversations, selected.value); messages.value = []; question.value = ''; generation++; persistConversations(true)
+    deleteDoc.value = null; versionDoc.value = null; await loadDocs()
+    notice.value = result.file_cleanup_pending ? '文档已删除，部分文件等待存储回收。' : '文档及其全部版本、切片与向量已删除。'
+  } catch (e) { fail(e) } finally { adminBusy.value = false }
+}
 const systemStatus = ref(null), systemLoading = ref(false), systemError = ref('')
 const systemLabels = {mysql:'MySQL',redis:'Redis',milvus:'Milvus',worker:'Worker',jobs:'文档任务'}
 const jobLabels = {pending:'等待处理',parsed:'解析完成',failed:'失败',indexing:'正在索引',indexed:'索引完成'}
@@ -217,7 +255,7 @@ async function retry(d) {
     const path = d.status === 'parsed' ? 'index' : 'retry'
     const result = await api(`/document-versions/${d.version_id}/${path}`, {method: 'POST'})
     notice.value = result.queued ? '任务已投递，状态将自动刷新。' : '暂未入队，请稍后重试'
-    await loadDocs()
+    if (mode.value==='console' && consoleSection.value==='failures') await loadFailures(); else await loadDocs()
   } catch (e) { fail(e) } finally { action.value = null }
 }
 async function ask() {
@@ -436,7 +474,8 @@ async function enterConsole(section = 'knowledge') {
   localStorage.setItem(MODE_KEY, 'console')
   issuedToken.value = ''
   if (section === 'users' || section === 'tenants') await loadUsers()
-  if (section === 'audit') await loadAudit()
+  if (section === 'audit') { await loadTenants(); await loadAudit() }
+  if (section === 'failures') await loadFailures()
   if (section === 'system' && me.value?.is_platform_admin) await loadSystemStatus()
   if (section === 'knowledge') await loadKB()
 }
@@ -522,6 +561,7 @@ function publishLabel(d) {
   if (d.retired_at) return '已下架'
   if (d.review_status === 'pending') return '待审核'
   if (d.review_status === 'rejected') return '已驳回'
+  if (d.is_current && (d.status!=='parsed' || d.index_status!=='indexed')) return '待处理完成'
   return d.is_current ? '已发布' : '未发布'
 }
 async function uploadVersion(d, event) {
@@ -676,6 +716,7 @@ onUnmounted(() => clearInterval(timer))
         <button :class="{chosen:consoleSection==='users'}" @click="enterConsole('users')">用户</button>
         <button v-if="me.is_platform_admin" :class="{chosen:consoleSection==='tenants'}" @click="enterConsole('tenants')">租户</button>
         <button v-if="me.is_platform_admin" :class="{chosen:consoleSection==='system'}" @click="enterConsole('system')">系统状态</button>
+        <button :class="{chosen:consoleSection==='failures'}" @click="enterConsole('failures')">失败任务</button>
         <button :class="{chosen:consoleSection==='audit'}" @click="enterConsole('audit')">审计</button>
       </nav>
 
@@ -793,9 +834,11 @@ onUnmounted(() => clearInterval(timer))
                 <td>{{d.chunk_count}}</td>
                 <td><span class="badge" :class="{ready:!d.retired_at&&d.review_status==='approved'&&d.is_current}">{{publishLabel(d)}}</span><small v-if="d.version">v{{d.version}}</small></td>
                 <td class="row-actions">
-                  <button v-if="canWriteKb && (d.status!=='parsed'||d.index_status!=='indexed')" class="text-button" :disabled="action===d.id" @click="retry(d)">{{action===d.id?'投递中…':d.status==='parsed'?'重试索引':'重试解析'}}</button>
+                  <button v-if="canWriteKb && (d.status==='failed'||(d.status==='parsed'&&['pending','failed'].includes(d.index_status)))" class="text-button" :disabled="action===d.id" @click="retry(d)">{{action===d.id?'投递中…':d.status==='parsed'?'重试索引':'重试解析'}}</button>
                   <span v-else-if="d.status==='parsed'&&d.index_status==='indexed'" class="ready">✓ 就绪</span>
                   <span v-else class="ready">等待处理</span>
+                  <button class="text-button" :disabled="adminBusy" @click="openVersions(d)">版本历史</button>
+                  <button v-if="isAdmin" class="text-button" :disabled="adminBusy" @click="deleteDoc=d;deleteDocName=''">删除文档</button>
                   <label v-if="canWriteKb" class="text-button">上传新版本<input type="file" accept=".txt,.md,.pdf" hidden @change="uploadVersion(d,$event)"></label>
                   <button v-if="canWriteKb && !d.retired_at" class="text-button" :disabled="adminBusy" @click="retireDoc(d)">下架</button>
                 </td>
@@ -812,8 +855,8 @@ onUnmounted(() => clearInterval(timer))
       <div class="page-head">
         <div>
           <span class="eyebrow">ADMIN CONSOLE</span>
-          <h1>{{({knowledge:'知识库管理',users:'用户管理',tenants:'租户管理',audit:'审计日志',system:'系统状态'})[consoleSection]}}</h1>
-          <p>{{({knowledge:'创建与维护知识库；进入某个知识库可上传资料、审核版本、分配成员。',users:'创建账号、调整角色与租户、签发或吊销 Token。',tenants:'平台级租户的新建与查看，所有数据按租户隔离。',audit:'谁在何时对哪个对象做了什么；可按租户筛选并导出 CSV。',system:'检查基础服务连接、Worker 响应和文档任务状态。'})[consoleSection]}}</p>
+          <h1>{{({knowledge:'知识库管理',users:'用户管理',tenants:'租户管理',audit:'审计日志',system:'系统状态',failures:'失败任务'})[consoleSection]}}</h1>
+          <p>{{({knowledge:'创建与维护知识库；进入某个知识库可上传资料、审核版本、分配成员。',users:'创建账号、调整角色与租户、签发或吊销 Token。',tenants:'平台级租户的新建与查看，所有数据按租户隔离。',audit:'谁在何时对哪个对象做了什么；可按租户筛选并导出 CSV。',system:'检查基础服务连接、Worker 响应和文档任务状态。',failures:'定位解析与索引失败，查看原因并按需重试。'})[consoleSection]}}</p>
         </div>
       </div>
 
@@ -927,6 +970,15 @@ onUnmounted(() => clearInterval(timer))
         </div>
       </section>
 
+      <section v-else-if="consoleSection==='failures'" class="console">
+        <div class="console-toolbar"><button :disabled="adminBusy" @click="loadFailures">刷新失败任务</button></div>
+        <p class="muted">无效编码、扫描 PDF 等内容问题需要修正原文件后上传新版本；重复解析不会自动修复。重试仅投递该版本的失败阶段。</p>
+        <div class="table-wrap"><table><thead><tr><th>知识库</th><th>文档 / 版本</th><th>失败阶段</th><th>原因</th><th>操作</th></tr></thead>
+          <tbody><tr v-for="d in failures" :key="d.version_id"><td>{{d.knowledge_base_name}}</td><td>{{d.filename}} · v{{d.version}}</td><td>{{d.stage==='parse'?'解析':'索引'}}</td><td>{{d.error || '未记录原因'}}</td><td class="row-actions"><button :disabled="adminBusy" @click="openFailure(d)">查看资料</button><button :disabled="adminBusy||action===d.id" @click="retry(d)">重试{{d.stage==='parse'?'解析':'索引'}}</button></td></tr></tbody></table>
+          <div v-if="!failures.length" class="empty">当前页没有失败记录。</div></div>
+        <div class="pagination"><button :disabled="adminBusy||failurePage===0" @click="failurePage--;loadFailures()">上一页</button><span>第 {{failurePage+1}} 页</span><button :disabled="adminBusy||failures.length<50" @click="failurePage++;loadFailures()">下一页</button></div>
+      </section>
+
       <section v-else-if="consoleSection==='system'" class="console" aria-label="系统状态">
         <div class="console-toolbar">
           <button class="primary" :disabled="systemLoading" @click="loadSystemStatus">{{systemLoading?'正在检查…':'刷新状态'}}</button>
@@ -960,7 +1012,7 @@ onUnmounted(() => clearInterval(timer))
             <option v-for="t in tenants" :key="t.id" :value="t.id">{{t.name}}</option>
           </select>
           <span class="muted">最近 50 条</span>
-          <a class="ghost" :href="auditTenant === '' ? '/api/v1/admin/audit-logs/export' : '/api/v1/admin/audit-logs/export?tenant_id='+auditTenant" target="_blank" rel="noopener">导出 CSV ↘</a>
+          <button class="ghost" :disabled="adminBusy" @click="exportAudit">导出 CSV ↘</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -983,6 +1035,21 @@ onUnmounted(() => clearInterval(timer))
 
     <footer>KnowOps <span>企业内部知识库问答平台</span><span>文档 → 检索 → 有据回答</span></footer>
   </template>
+
+  <div v-if="versionDoc" class="overlay" @click.self="!adminBusy && (versionDoc=null)">
+    <section class="modal" role="dialog" aria-modal="true" aria-label="版本历史">
+      <div class="modal-heading"><h2>版本历史 · {{versionDoc.filename}}</h2><button :disabled="adminBusy" @click="versionDoc=null">关闭</button></div>
+      <p>只有解析、索引完成且审核通过的版本可以切换为有效版本。</p>
+      <div class="table-wrap"><table><thead><tr><th>版本</th><th>处理</th><th>审核</th><th>当前选择</th><th>操作</th></tr></thead><tbody><tr v-for="v in versions" :key="v.version_id"><td>v{{v.version}}</td><td>{{v.status}} / {{v.index_status}}</td><td>{{v.review_status}}</td><td>{{v.is_current?'是':'否'}}</td><td><button v-if="canWriteKb" :disabled="adminBusy||v.is_current||v.status!=='parsed'||v.index_status!=='indexed'||v.review_status!=='approved'" @click="publishVersion(v)">设为有效版本</button></td></tr></tbody></table></div>
+    </section>
+  </div>
+  <div v-if="deleteDoc" class="overlay" @click.self="!adminBusy && (deleteDoc=null)">
+    <form class="modal" role="dialog" aria-modal="true" aria-label="删除文档" @submit.prevent="confirmDeleteDoc">
+      <h2>删除文档</h2><p>将永久删除「{{deleteDoc.filename}}」的全部版本、切片、向量和未共享文件，无法恢复。知识库、其他文档、审计与历史反馈保留。</p>
+      <label>输入完整文件名确认<input v-model="deleteDocName" aria-label="删除文档确认文件名" :disabled="adminBusy" maxlength="255"></label>
+      <div class="modal-actions"><button class="primary" :disabled="adminBusy||deleteDocName!==deleteDoc.filename">确认永久删除</button><button type="button" :disabled="adminBusy" @click="deleteDoc=null">取消</button></div>
+    </form>
+  </div>
 
   <!-- ================= 安全设置 ================= -->
   <div v-if="showSecurity" class="overlay" @click.self="showSecurity=false">

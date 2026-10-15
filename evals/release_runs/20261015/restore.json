@@ -1,0 +1,8 @@
+{
+  "tables_verified": 15,
+  "files_verified": 233,
+  "sql_checksums": true,
+  "isolated_restore": true,
+  "production_overwrite": false,
+  "milvus_rebuild_tested": false
+}

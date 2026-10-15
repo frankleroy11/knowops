@@ -149,7 +149,7 @@ def test_search_resolves_custom_primary_key_and_filters_kb(sessions):
             yield db
 
     class Store:
-        def search(self, vector, kb_id, limit):
+        def search(self, vector, kb_id, limit, **kwargs):
             return [{"chunk_id": 1, "distance": 0.8}]
 
         def close(self):
@@ -240,7 +240,7 @@ def test_rerank_receives_only_authorized_candidates(sessions):
             yield db
 
     class Store:
-        def search(self, vector, kb_id, limit):
+        def search(self, vector, kb_id, limit, **kwargs):
             assert limit == 10
             return [{"chunk_id": 1, "distance": 0.9}, {"chunk_id": 9999, "distance": 0.8}]
 
@@ -313,7 +313,7 @@ def test_all_scope_resolves_existing_kbs_and_preserves_single_kb_filter(sessions
             yield db
 
     class Store:
-        def search(self, vector, kb_id, limit):
+        def search(self, vector, kb_id, limit, **kwargs):
             assert kb_id == [1, 2] or kb_id == 1
             return [
                 {"chunk_id": 1, "distance": 0.9},

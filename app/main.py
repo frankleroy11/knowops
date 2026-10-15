@@ -6,11 +6,11 @@ from app.modules.knowledge.router import router as knowledge_router
 
 app = FastAPI(
     title=get_settings().app_name,
-    version="0.6.0",
+    version="0.7.0",
     description=(
-        "企业知识库问答平台：支持知识库创建、文档上传与异步解析。支持 BGE-M3 语义检索；"
-        "支持 Qwen 带来源引用问答；支持 API Token 认证与知识库成员授权（AUTH_MODE=off/enforced，"
-        "默认 off 即单机本地管理员）。前端登录与审核发布流程见后续阶段。"
+        "企业知识库问答平台：支持多租户、账号认证与成员授权、文档异步解析和 BGE-M3/Milvus 检索。"
+        "支持审核发布、版本切换、失败重试、资料删除、统一问答与逐事实引用校验、反馈和审计。"
+        "AUTH_MODE=enforced 启用登录；off 为本地免鉴权管理员模式。"
     ),
 )
 app.include_router(router, prefix="/api/v1")
