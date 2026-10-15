@@ -1,0 +1,872 @@
+{
+  "kind": "paired synthetic development comparison; not blind",
+  "metadata": {
+    "llm_model": "qwen-plus",
+    "embedding_model": "BAAI/bge-m3",
+    "embedding_max_length": 1024,
+    "top_k": 3,
+    "size": 800,
+    "overlap": 100,
+    "git_commit": "30a4a095087f79f2e599e1e7c583f0a20db8d2a5",
+    "working_tree_dirty": true,
+    "dataset_sha256": "d33a8139e4d6d244d3c01bd3dd9367a48c5a89d46fa7265e9ad037da10fb0c34"
+  },
+  "cases": [
+    {
+      "id": "long-clause",
+      "text": "# 专项审批\n\n背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审\n\n白鹭专项审批：费用不超过 128 元时，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，必须由部门负责人批准。\n\n结束。",
+      "evidence": "白鹭专项审批：费用不超过 128 元时，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，必须由部门负责人批准。",
+      "questions": [
+        [
+          "白鹭专项费用不超过多少元时，由谁批准？",
+          [
+            "128",
+            "部门负责人"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "table",
+      "text": "普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明\n\n| 套餐 | 容量 | 保留期 |\n| --- | --- | --- |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n\n\n咨询客服。",
+      "evidence": "| 套餐 | 容量 | 保留期 |\n| --- | --- | --- |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |",
+      "questions": [
+        [
+          "标准套餐容量是多少，保留期多少天？",
+          [
+            "20",
+            "30"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "policy",
+      "text": "# 午餐制度\n\n白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。",
+      "evidence": "白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。",
+      "questions": [
+        [
+          "白鹭验收计划午餐报销每天上限多少元？",
+          [
+            "128"
+          ]
+        ],
+        [
+          "白鹭验收计划报销必须提交什么凭证？",
+          [
+            "电子发票"
+          ]
+        ],
+        [
+          "白鹭验收计划员工午餐报销必须提交什么凭证？",
+          [
+            "电子发票"
+          ]
+        ],
+        [
+          "白鹭验收计划年终奖金是多少？",
+          null
+        ]
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "strategy": "fixed",
+      "case": "long-clause",
+      "question": "白鹭专项费用不超过多少元时，由谁批准？",
+      "chunk_count": 2,
+      "max_chunk_chars": 800,
+      "evidence_whole_in_any_chunk": false,
+      "evidence_whole_in_retrieved_chunk": false,
+      "heuristic_passed": false,
+      "http_ms": 1931.22,
+      "retrieved_hits": [
+        {
+          "chunk_id": 781,
+          "score": 0.6631267666816711,
+          "document_id": 249,
+          "knowledge_base_id": 34,
+          "knowledge_base_name": "chunking-696c4b185d98-fixed-long-clause",
+          "filename": "long-clause.md",
+          "version_id": 256,
+          "position": 0,
+          "page": null,
+          "content": "# 专项审批\n\n背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审\n\n白鹭专项审批：费用不超过 128 元时，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付"
+        },
+        {
+          "chunk_id": 782,
+          "score": 0.36050933599472046,
+          "document_id": 249,
+          "knowledge_base_id": 34,
+          "knowledge_base_name": "chunking-696c4b185d98-fixed-long-clause",
+          "filename": "long-clause.md",
+          "version_id": 256,
+          "position": 1,
+          "page": null,
+          "content": "当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，必须由部门负责人批准。\n\n结束。"
+        }
+      ],
+      "response": {
+        "answer": "现有知识库资料不足，无法回答这个问题。",
+        "answerable": false,
+        "citations": [],
+        "claims": [],
+        "grounding_status": "model_refused",
+        "context_chunk_count": 2,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 540.26,
+          "generation": 1329.34,
+          "total": 1869.6
+        }
+      }
+    },
+    {
+      "strategy": "fixed",
+      "case": "table",
+      "question": "标准套餐容量是多少，保留期多少天？",
+      "chunk_count": 2,
+      "max_chunk_chars": 800,
+      "evidence_whole_in_any_chunk": false,
+      "evidence_whole_in_retrieved_chunk": false,
+      "heuristic_passed": true,
+      "http_ms": 5718.0,
+      "retrieved_hits": [
+        {
+          "chunk_id": 784,
+          "score": 0.7207241058349609,
+          "document_id": 250,
+          "knowledge_base_id": 35,
+          "knowledge_base_name": "chunking-696c4b185d98-fixed-table",
+          "filename": "table.md",
+          "version_id": 257,
+          "position": 1,
+          "page": null,
+          "content": "0 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n\n\n咨询客服。"
+        },
+        {
+          "chunk_id": 783,
+          "score": 0.6778000593185425,
+          "document_id": 250,
+          "knowledge_base_id": 35,
+          "knowledge_base_name": "chunking-696c4b185d98-fixed-table",
+          "filename": "table.md",
+          "version_id": 257,
+          "position": 0,
+          "page": null,
+          "content": "普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明\n\n| 套餐 | 容量 | 保留期 |\n| --- | --- | --- |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB"
+        }
+      ],
+      "response": {
+        "answer": "标准套餐容量是20 GB。\n标准套餐保留期是30天。",
+        "answerable": true,
+        "claims": [
+          {
+            "text": "标准套餐容量是20 GB。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "| 标准套餐 | 20 GB | 30 天 |"
+              },
+              {
+                "source_id": 2,
+                "quote": "| 标准套餐 | 20 GB | 30 天 |"
+              }
+            ]
+          },
+          {
+            "text": "标准套餐保留期是30天。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "| 标准套餐 | 20 GB | 30 天 |"
+              },
+              {
+                "source_id": 2,
+                "quote": "| 标准套餐 | 20 GB | 30 天 |"
+              }
+            ]
+          }
+        ],
+        "source_id_corrections": [],
+        "grounding_status": "quotes_validated",
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 784,
+            "score": 0.7207241058349609,
+            "document_id": 250,
+            "knowledge_base_id": 35,
+            "knowledge_base_name": "chunking-696c4b185d98-fixed-table",
+            "filename": "table.md",
+            "version_id": 257,
+            "position": 1,
+            "page": null,
+            "content": "0 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n\n\n咨询客服。"
+          },
+          {
+            "source_id": 2,
+            "chunk_id": 783,
+            "score": 0.6778000593185425,
+            "document_id": 250,
+            "knowledge_base_id": 35,
+            "knowledge_base_name": "chunking-696c4b185d98-fixed-table",
+            "filename": "table.md",
+            "version_id": 257,
+            "position": 0,
+            "page": null,
+            "content": "普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明\n\n| 套餐 | 容量 | 保留期 |\n| --- | --- | --- |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB"
+          }
+        ],
+        "context_chunk_count": 2,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 461.31,
+          "generation": 5198.08,
+          "total": 5659.4
+        }
+      }
+    },
+    {
+      "strategy": "fixed",
+      "case": "policy",
+      "question": "白鹭验收计划午餐报销每天上限多少元？",
+      "chunk_count": 1,
+      "max_chunk_chars": 43,
+      "evidence_whole_in_any_chunk": true,
+      "evidence_whole_in_retrieved_chunk": true,
+      "heuristic_passed": true,
+      "http_ms": 3553.52,
+      "retrieved_hits": [
+        {
+          "chunk_id": 785,
+          "score": 0.8697993755340576,
+          "document_id": 251,
+          "knowledge_base_id": 36,
+          "knowledge_base_name": "chunking-696c4b185d98-fixed-policy",
+          "filename": "policy.md",
+          "version_id": 258,
+          "position": 0,
+          "page": null,
+          "content": "# 午餐制度\n\n白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+        }
+      ],
+      "response": {
+        "answer": "白鹭验收计划午餐报销每天上限为128元。",
+        "answerable": true,
+        "claims": [
+          {
+            "text": "白鹭验收计划午餐报销每天上限为128元。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "白鹭验收计划员工午餐报销上限为每人每天 128 元。"
+              }
+            ]
+          }
+        ],
+        "source_id_corrections": [],
+        "grounding_status": "quotes_validated",
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 785,
+            "score": 0.8697993755340576,
+            "document_id": 251,
+            "knowledge_base_id": 36,
+            "knowledge_base_name": "chunking-696c4b185d98-fixed-policy",
+            "filename": "policy.md",
+            "version_id": 258,
+            "position": 0,
+            "page": null,
+            "content": "# 午餐制度\n\n白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+          }
+        ],
+        "context_chunk_count": 1,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 358.12,
+          "generation": 3171.0,
+          "total": 3529.12
+        }
+      }
+    },
+    {
+      "strategy": "fixed",
+      "case": "policy",
+      "question": "白鹭验收计划报销必须提交什么凭证？",
+      "chunk_count": 1,
+      "max_chunk_chars": 43,
+      "evidence_whole_in_any_chunk": true,
+      "evidence_whole_in_retrieved_chunk": true,
+      "heuristic_passed": true,
+      "http_ms": 2492.91,
+      "retrieved_hits": [
+        {
+          "chunk_id": 785,
+          "score": 0.6682227849960327,
+          "document_id": 251,
+          "knowledge_base_id": 36,
+          "knowledge_base_name": "chunking-696c4b185d98-fixed-policy",
+          "filename": "policy.md",
+          "version_id": 258,
+          "position": 0,
+          "page": null,
+          "content": "# 午餐制度\n\n白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+        }
+      ],
+      "response": {
+        "answer": "白鹭验收计划报销必须提交电子发票。",
+        "answerable": true,
+        "claims": [
+          {
+            "text": "白鹭验收计划报销必须提交电子发票。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "必须提交电子发票。"
+              }
+            ]
+          }
+        ],
+        "source_id_corrections": [],
+        "grounding_status": "quotes_validated",
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 785,
+            "score": 0.6682227849960327,
+            "document_id": 251,
+            "knowledge_base_id": 36,
+            "knowledge_base_name": "chunking-696c4b185d98-fixed-policy",
+            "filename": "policy.md",
+            "version_id": 258,
+            "position": 0,
+            "page": null,
+            "content": "# 午餐制度\n\n白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+          }
+        ],
+        "context_chunk_count": 1,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 377.89,
+          "generation": 2089.55,
+          "total": 2467.44
+        }
+      }
+    },
+    {
+      "strategy": "fixed",
+      "case": "policy",
+      "question": "白鹭验收计划员工午餐报销必须提交什么凭证？",
+      "chunk_count": 1,
+      "max_chunk_chars": 43,
+      "evidence_whole_in_any_chunk": true,
+      "evidence_whole_in_retrieved_chunk": true,
+      "heuristic_passed": true,
+      "http_ms": 2476.28,
+      "retrieved_hits": [
+        {
+          "chunk_id": 785,
+          "score": 0.7637648582458496,
+          "document_id": 251,
+          "knowledge_base_id": 36,
+          "knowledge_base_name": "chunking-696c4b185d98-fixed-policy",
+          "filename": "policy.md",
+          "version_id": 258,
+          "position": 0,
+          "page": null,
+          "content": "# 午餐制度\n\n白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+        }
+      ],
+      "response": {
+        "answer": "白鹭验收计划员工午餐报销必须提交电子发票。",
+        "answerable": true,
+        "claims": [
+          {
+            "text": "白鹭验收计划员工午餐报销必须提交电子发票。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "必须提交电子发票。"
+              }
+            ]
+          }
+        ],
+        "source_id_corrections": [],
+        "grounding_status": "quotes_validated",
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 785,
+            "score": 0.7637648582458496,
+            "document_id": 251,
+            "knowledge_base_id": 36,
+            "knowledge_base_name": "chunking-696c4b185d98-fixed-policy",
+            "filename": "policy.md",
+            "version_id": 258,
+            "position": 0,
+            "page": null,
+            "content": "# 午餐制度\n\n白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+          }
+        ],
+        "context_chunk_count": 1,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 379.97,
+          "generation": 2086.9,
+          "total": 2466.87
+        }
+      }
+    },
+    {
+      "strategy": "fixed",
+      "case": "policy",
+      "question": "白鹭验收计划年终奖金是多少？",
+      "chunk_count": 1,
+      "max_chunk_chars": 43,
+      "evidence_whole_in_any_chunk": true,
+      "evidence_whole_in_retrieved_chunk": true,
+      "heuristic_passed": true,
+      "http_ms": 1714.48,
+      "retrieved_hits": [
+        {
+          "chunk_id": 785,
+          "score": 0.6533815860748291,
+          "document_id": 251,
+          "knowledge_base_id": 36,
+          "knowledge_base_name": "chunking-696c4b185d98-fixed-policy",
+          "filename": "policy.md",
+          "version_id": 258,
+          "position": 0,
+          "page": null,
+          "content": "# 午餐制度\n\n白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+        }
+      ],
+      "response": {
+        "answer": "现有知识库资料不足，无法回答这个问题。",
+        "answerable": false,
+        "citations": [],
+        "claims": [],
+        "grounding_status": "model_refused",
+        "context_chunk_count": 1,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 548.6,
+          "generation": 1138.14,
+          "total": 1686.74
+        }
+      }
+    },
+    {
+      "strategy": "structure",
+      "case": "long-clause",
+      "question": "白鹭专项费用不超过多少元时，由谁批准？",
+      "chunk_count": 2,
+      "max_chunk_chars": 650,
+      "evidence_whole_in_any_chunk": true,
+      "evidence_whole_in_retrieved_chunk": true,
+      "heuristic_passed": true,
+      "http_ms": 4971.48,
+      "retrieved_hits": [
+        {
+          "chunk_id": 787,
+          "score": 0.7285085320472717,
+          "document_id": 252,
+          "knowledge_base_id": 37,
+          "knowledge_base_name": "chunking-696c4b185d98-structure-long-clause",
+          "filename": "long-clause.md",
+          "version_id": 259,
+          "position": 1,
+          "page": null,
+          "content": "背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审\n\n白鹭专项审批：费用不超过 128 元时，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，必须由部门负责人批准。\n\n结束。"
+        },
+        {
+          "chunk_id": 786,
+          "score": 0.40621864795684814,
+          "document_id": 252,
+          "knowledge_base_id": 37,
+          "knowledge_base_name": "chunking-696c4b185d98-structure-long-clause",
+          "filename": "long-clause.md",
+          "version_id": 259,
+          "position": 0,
+          "page": null,
+          "content": "# 专项审批\n\n背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审"
+        }
+      ],
+      "response": {
+        "answer": "白鹭专项费用不超过128元时，由部门负责人批准。",
+        "answerable": true,
+        "claims": [
+          {
+            "text": "白鹭专项费用不超过128元时，由部门负责人批准。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "白鹭专项审批：费用不超过 128 元时，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，必须由部门负责人批准。"
+              }
+            ]
+          }
+        ],
+        "source_id_corrections": [],
+        "grounding_status": "quotes_validated",
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 787,
+            "score": 0.7285085320472717,
+            "document_id": 252,
+            "knowledge_base_id": 37,
+            "knowledge_base_name": "chunking-696c4b185d98-structure-long-clause",
+            "filename": "long-clause.md",
+            "version_id": 259,
+            "position": 1,
+            "page": null,
+            "content": "背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审批依据。背景说明仅供阅读，不作为审\n\n白鹭专项审批：费用不超过 128 元时，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，提交的材料应当包括签字原件及对应的付款凭证，必须由部门负责人批准。\n\n结束。"
+          }
+        ],
+        "context_chunk_count": 2,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 719.12,
+          "generation": 4206.38,
+          "total": 4925.5
+        }
+      }
+    },
+    {
+      "strategy": "structure",
+      "case": "table",
+      "question": "标准套餐容量是多少，保留期多少天？",
+      "chunk_count": 2,
+      "max_chunk_chars": 650,
+      "evidence_whole_in_any_chunk": true,
+      "evidence_whole_in_retrieved_chunk": true,
+      "heuristic_passed": true,
+      "http_ms": 6636.18,
+      "retrieved_hits": [
+        {
+          "chunk_id": 789,
+          "score": 0.7743650674819946,
+          "document_id": 253,
+          "knowledge_base_id": 38,
+          "knowledge_base_name": "chunking-696c4b185d98-structure-table",
+          "filename": "table.md",
+          "version_id": 260,
+          "position": 1,
+          "page": null,
+          "content": "| 套餐 | 容量 | 保留期 |\n| --- | --- | --- |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n\n\n咨询客服。"
+        },
+        {
+          "chunk_id": 788,
+          "score": 0.49112558364868164,
+          "document_id": 253,
+          "knowledge_base_id": 38,
+          "knowledge_base_name": "chunking-696c4b185d98-structure-table",
+          "filename": "table.md",
+          "version_id": 260,
+          "position": 0,
+          "page": null,
+          "content": "普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明。普通服务说明"
+        }
+      ],
+      "response": {
+        "answer": "标准套餐容量是20 GB\n标准套餐保留期是30天",
+        "answerable": true,
+        "claims": [
+          {
+            "text": "标准套餐容量是20 GB",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "| 标准套餐 | 20 GB | 30 天 |"
+              }
+            ]
+          },
+          {
+            "text": "标准套餐保留期是30天",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "| 标准套餐 | 20 GB | 30 天 |"
+              }
+            ]
+          }
+        ],
+        "source_id_corrections": [],
+        "grounding_status": "quotes_validated",
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 789,
+            "score": 0.7743650674819946,
+            "document_id": 253,
+            "knowledge_base_id": 38,
+            "knowledge_base_name": "chunking-696c4b185d98-structure-table",
+            "filename": "table.md",
+            "version_id": 260,
+            "position": 1,
+            "page": null,
+            "content": "| 套餐 | 容量 | 保留期 |\n| --- | --- | --- |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n| 标准套餐 | 20 GB | 30 天 |\n\n\n咨询客服。"
+          }
+        ],
+        "context_chunk_count": 2,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 2833.64,
+          "generation": 3752.97,
+          "total": 6586.62
+        }
+      }
+    },
+    {
+      "strategy": "structure",
+      "case": "policy",
+      "question": "白鹭验收计划午餐报销每天上限多少元？",
+      "chunk_count": 1,
+      "max_chunk_chars": 43,
+      "evidence_whole_in_any_chunk": true,
+      "evidence_whole_in_retrieved_chunk": true,
+      "heuristic_passed": true,
+      "http_ms": 2990.21,
+      "retrieved_hits": [
+        {
+          "chunk_id": 790,
+          "score": 0.8697993755340576,
+          "document_id": 254,
+          "knowledge_base_id": 39,
+          "knowledge_base_name": "chunking-696c4b185d98-structure-policy",
+          "filename": "policy.md",
+          "version_id": 261,
+          "position": 0,
+          "page": null,
+          "content": "# 午餐制度\n\n白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+        }
+      ],
+      "response": {
+        "answer": "白鹭验收计划午餐报销每天上限为128元。",
+        "answerable": true,
+        "claims": [
+          {
+            "text": "白鹭验收计划午餐报销每天上限为128元。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "白鹭验收计划员工午餐报销上限为每人每天 128 元。"
+              }
+            ]
+          }
+        ],
+        "source_id_corrections": [],
+        "grounding_status": "quotes_validated",
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 790,
+            "score": 0.8697993755340576,
+            "document_id": 254,
+            "knowledge_base_id": 39,
+            "knowledge_base_name": "chunking-696c4b185d98-structure-policy",
+            "filename": "policy.md",
+            "version_id": 261,
+            "position": 0,
+            "page": null,
+            "content": "# 午餐制度\n\n白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+          }
+        ],
+        "context_chunk_count": 1,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 485.42,
+          "generation": 2466.77,
+          "total": 2952.19
+        }
+      }
+    },
+    {
+      "strategy": "structure",
+      "case": "policy",
+      "question": "白鹭验收计划报销必须提交什么凭证？",
+      "chunk_count": 1,
+      "max_chunk_chars": 43,
+      "evidence_whole_in_any_chunk": true,
+      "evidence_whole_in_retrieved_chunk": true,
+      "heuristic_passed": true,
+      "http_ms": 2440.84,
+      "retrieved_hits": [
+        {
+          "chunk_id": 790,
+          "score": 0.6682227849960327,
+          "document_id": 254,
+          "knowledge_base_id": 39,
+          "knowledge_base_name": "chunking-696c4b185d98-structure-policy",
+          "filename": "policy.md",
+          "version_id": 261,
+          "position": 0,
+          "page": null,
+          "content": "# 午餐制度\n\n白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+        }
+      ],
+      "response": {
+        "answer": "白鹭验收计划报销必须提交电子发票。",
+        "answerable": true,
+        "claims": [
+          {
+            "text": "白鹭验收计划报销必须提交电子发票。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "必须提交电子发票。"
+              }
+            ]
+          }
+        ],
+        "source_id_corrections": [],
+        "grounding_status": "quotes_validated",
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 790,
+            "score": 0.6682227849960327,
+            "document_id": 254,
+            "knowledge_base_id": 39,
+            "knowledge_base_name": "chunking-696c4b185d98-structure-policy",
+            "filename": "policy.md",
+            "version_id": 261,
+            "position": 0,
+            "page": null,
+            "content": "# 午餐制度\n\n白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+          }
+        ],
+        "context_chunk_count": 1,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 355.48,
+          "generation": 2070.89,
+          "total": 2426.37
+        }
+      }
+    },
+    {
+      "strategy": "structure",
+      "case": "policy",
+      "question": "白鹭验收计划员工午餐报销必须提交什么凭证？",
+      "chunk_count": 1,
+      "max_chunk_chars": 43,
+      "evidence_whole_in_any_chunk": true,
+      "evidence_whole_in_retrieved_chunk": true,
+      "heuristic_passed": true,
+      "http_ms": 2648.97,
+      "retrieved_hits": [
+        {
+          "chunk_id": 790,
+          "score": 0.7637648582458496,
+          "document_id": 254,
+          "knowledge_base_id": 39,
+          "knowledge_base_name": "chunking-696c4b185d98-structure-policy",
+          "filename": "policy.md",
+          "version_id": 261,
+          "position": 0,
+          "page": null,
+          "content": "# 午餐制度\n\n白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+        }
+      ],
+      "response": {
+        "answer": "白鹭验收计划员工午餐报销必须提交电子发票。",
+        "answerable": true,
+        "claims": [
+          {
+            "text": "白鹭验收计划员工午餐报销必须提交电子发票。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "必须提交电子发票。"
+              }
+            ]
+          }
+        ],
+        "source_id_corrections": [],
+        "grounding_status": "quotes_validated",
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 790,
+            "score": 0.7637648582458496,
+            "document_id": 254,
+            "knowledge_base_id": 39,
+            "knowledge_base_name": "chunking-696c4b185d98-structure-policy",
+            "filename": "policy.md",
+            "version_id": 261,
+            "position": 0,
+            "page": null,
+            "content": "# 午餐制度\n\n白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+          }
+        ],
+        "context_chunk_count": 1,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 483.63,
+          "generation": 2143.07,
+          "total": 2626.69
+        }
+      }
+    },
+    {
+      "strategy": "structure",
+      "case": "policy",
+      "question": "白鹭验收计划年终奖金是多少？",
+      "chunk_count": 1,
+      "max_chunk_chars": 43,
+      "evidence_whole_in_any_chunk": true,
+      "evidence_whole_in_retrieved_chunk": true,
+      "heuristic_passed": true,
+      "http_ms": 1521.03,
+      "retrieved_hits": [
+        {
+          "chunk_id": 790,
+          "score": 0.6533815860748291,
+          "document_id": 254,
+          "knowledge_base_id": 39,
+          "knowledge_base_name": "chunking-696c4b185d98-structure-policy",
+          "filename": "policy.md",
+          "version_id": 261,
+          "position": 0,
+          "page": null,
+          "content": "# 午餐制度\n\n白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+        }
+      ],
+      "response": {
+        "answer": "现有知识库资料不足，无法回答这个问题。",
+        "answerable": false,
+        "citations": [],
+        "claims": [],
+        "grounding_status": "model_refused",
+        "context_chunk_count": 1,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 391.9,
+          "generation": 1117.72,
+          "total": 1509.62
+        }
+      }
+    }
+  ],
+  "summary": {
+    "fixed": {
+      "questions": 6,
+      "heuristic_passed": 5,
+      "documents": 3,
+      "whole_evidence_documents": 1,
+      "chunks": 5
+    },
+    "structure": {
+      "questions": 6,
+      "heuristic_passed": 6,
+      "documents": 3,
+      "whole_evidence_documents": 3,
+      "chunks": 5
+    }
+  },
+  "baseline_restored": true
+}

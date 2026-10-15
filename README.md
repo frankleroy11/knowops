@@ -95,7 +95,7 @@ PYTHONPATH=. python scripts/check_release_flow.py --base-url http://127.0.0.1:80
 ## 边界与运行文档
 
 - 单文件 10 MiB，文本须 UTF-8；扫描/加密 PDF 需要外部 OCR/解密，不会靠重试自动修复。
-- 当前按字符窗口切分；SHA-256 是指纹，不是跨文档去重。
+- 默认按固定字符窗口切分，可选 `CHUNK_STRATEGY=structure` 优先结构边界；每个版本记录切分策略，旧文档不会自动重切。见 [切分对照与使用说明](docs/structure-aware-chunking.md)。SHA-256 是指纹，不是跨文档去重。
 - MySQL 是正文、权限与版本状态权威；Milvus 为可重建检索副本。解析完成不等于可问答。
 - 删除跨 MySQL/Milvus/文件系统无分布式事务；部分清理失败可重试，磁盘遗留由 GC 处理。
 - 没有自动修复卡住的索引租约、流式多轮对话、生产高可用或已验证的生产容量。

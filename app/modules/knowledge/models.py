@@ -59,6 +59,9 @@ class DocumentVersion(Base):
     storage_path: Mapped[str] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(32), default="pending")
     error: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    chunk_strategy: Mapped[str] = mapped_column(String(32), default="fixed", server_default="fixed")
+    chunk_size: Mapped[int] = mapped_column(Integer, default=800, server_default="800")
+    chunk_overlap: Mapped[int] = mapped_column(Integer, default=100, server_default="100")
     # Retrieval requires status=parsed + indexed + is_current + review approved.
     review_status: Mapped[str] = mapped_column(String(32), default=REVIEW_APPROVED)
     is_current: Mapped[bool] = mapped_column(Boolean, default=True)

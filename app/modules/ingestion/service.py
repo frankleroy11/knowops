@@ -19,7 +19,12 @@ def process_version(version_id: int):
         if version.status == "parsed":
             return {"status": "parsed", "duplicate": True}
         try:
-            chunks = parse_chunks(LocalStorage(ROOT).path(version.storage_path))
+            chunks = parse_chunks(
+                LocalStorage(ROOT).path(version.storage_path),
+                size=version.chunk_size,
+                overlap=version.chunk_overlap,
+                strategy=version.chunk_strategy,
+            )
         except Exception:  # noqa: BLE001 - isolate malformed input, expose no private exception text
             version.status = "failed"
             version.error = "解析失败：请检查 UTF-8 编码、PDF 是否加密或为扫描件"

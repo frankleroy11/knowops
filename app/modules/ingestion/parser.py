@@ -1,15 +1,19 @@
-"""Deterministic character windows; preserve PDF page provenance."""
+"""Deterministic fixed/structure-aware splitting; preserve PDF page provenance."""
 
 from pathlib import Path
 
 from pypdf import PdfReader
+
+from app.modules.ingestion.splitter import structured, windows
 
 
 class ParseError(ValueError):
     pass
 
 
-def parse_chunks(path: Path, size: int = 800, overlap: int = 100):
+def parse_chunks(path: Path, size: int = 800, overlap: int = 100, *, strategy: str = "fixed"):
+    if strategy not in {"fixed", "structure"}:
+        raise ValueError("unknown chunk strategy")
     if not 0 <= overlap < size:
         raise ValueError("overlap must be smaller than chunk size")
     if path.suffix.lower() == ".pdf":
@@ -25,12 +29,11 @@ def parse_chunks(path: Path, size: int = 800, overlap: int = 100):
     result = []
     for page, text in pages:
         text = text.replace("\x00", "").strip()
-        for start in range(0, len(text), size - overlap):
-            content = text[start : start + size].strip()
+        splitter = windows if strategy == "fixed" else structured
+        for content in splitter(text, size, overlap):
+            content = content.strip()
             if content:
                 result.append({"position": len(result), "page": page, "content": content})
-            if start + size >= len(text):
-                break
     if not result:
         raise ParseError("未提取到文本；扫描 PDF 需后续接入 OCR")
     return result
