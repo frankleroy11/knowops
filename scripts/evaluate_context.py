@@ -1,3 +1,6 @@
+# 中文导读：
+# 比较相同召回锚点有无相邻块扩展时的表现，关注上下文补充对答案与证据的影响
+
 """Paired development regression: same live search anchors, with/without adjacent context."""
 
 import hashlib

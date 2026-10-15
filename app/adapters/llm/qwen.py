@@ -1,3 +1,7 @@
+# 中文导读：
+# 通过兼容 OpenAI 的接口调用 Qwen，要求模型返回带证据的结构化回答
+# 模型输出仍须由问答模块校验，不能直接作为可信答案
+
 """Qwen through an OpenAI-compatible endpoint; never log provider bodies or keys."""
 
 import json
@@ -11,6 +15,7 @@ class LLMUnavailable(RuntimeError):
     pass
 
 
+# 只用给定证据构建生成请求；返回内容交给上层做结构及来源校验。
 def generate_grounded_answer(question: str, sources: list[dict]) -> dict:
     s = get_settings()
     if not s.llm_model or not s.llm_base_url:

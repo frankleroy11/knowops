@@ -1,4 +1,4 @@
-"""Account security: password policy/history, per-IP throttling, TOTP 2FA, reset tokens.""" 
+"""Account security: password policy/history, per-IP throttling, TOTP 2FA, reset tokens."""
 
 import base64
 from datetime import datetime, timedelta
@@ -141,11 +141,15 @@ def test_password_history_blocks_reuse_and_expires_after_n(client, enforced):
     headers = bearer("bob-token")
 
     def change(current, new):
-        return client.post(
+        response = client.post(
             "/api/v1/auth/password",
             json={"current_password": current, "new_password": new},
             headers=headers,
         )
+        if response.status_code == 200:
+            assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
+            headers.update(bearer(login(client, password=new).json()["token"]))
+        return response
 
     assert change(PASSWORD, "Second-Pass9").status_code == 200
     # 立刻改回：命中最近 2 条历史
@@ -193,12 +197,18 @@ def test_totp_enable_login_and_disable(client, enforced):
     setup = client.post("/api/v1/auth/2fa/setup", headers=bearer("bob-token")).json()
     secret = setup["secret"]
     assert setup["otpauth_uri"].startswith("otpauth://totp/")
-    assert client.post(
-        "/api/v1/auth/2fa/enable", json={"code": "000000"}, headers=bearer("bob-token")
-    ).status_code == 401
-    assert client.post(
-        "/api/v1/auth/2fa/enable", json={"code": totp_code(secret)}, headers=bearer("bob-token")
-    ).status_code == 200
+    assert (
+        client.post(
+            "/api/v1/auth/2fa/enable", json={"code": "000000"}, headers=bearer("bob-token")
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            "/api/v1/auth/2fa/enable", json={"code": totp_code(secret)}, headers=bearer("bob-token")
+        ).status_code
+        == 200
+    )
 
     missing = login(client)
     assert missing.status_code == 401 and missing.json()["detail"] == "需要二次验证码"
@@ -208,9 +218,14 @@ def test_totp_enable_login_and_disable(client, enforced):
 
     me = client.get("/api/v1/auth/me", headers=bearer("bob-token")).json()
     assert me["totp_enabled"] is True
-    assert client.post(
-        "/api/v1/auth/2fa/disable", json={"code": totp_code(secret)}, headers=bearer("bob-token")
-    ).status_code == 200
+    assert (
+        client.post(
+            "/api/v1/auth/2fa/disable",
+            json={"code": totp_code(secret)},
+            headers=bearer("bob-token"),
+        ).status_code
+        == 200
+    )
     assert login(client).status_code == 200
 
 
@@ -225,9 +240,9 @@ def test_reset_token_flow_is_generic_and_single_use(client, enforced, db_factory
 
     revealed = ENFORCED.model_copy(update={"auth_dev_reveal_reset_token": True})
     with patch.object(service, "get_settings", return_value=revealed):
-        token = client.post(
-            "/api/v1/auth/password/forgot", json={"email": "bob@corp"}
-        ).json()["dev_reset_token"]
+        token = client.post("/api/v1/auth/password/forgot", json={"email": "bob@corp"}).json()[
+            "dev_reset_token"
+        ]
 
     reset = client.post(
         "/api/v1/auth/password/reset", json={"token": token, "new_password": "Reset-Pass9"}
@@ -236,26 +251,34 @@ def test_reset_token_flow_is_generic_and_single_use(client, enforced, db_factory
     assert login(client, password=PASSWORD).status_code == 401
     assert login(client, password="Reset-Pass9").status_code == 200
     # 单次使用
-    assert client.post(
-        "/api/v1/auth/password/reset", json={"token": token, "new_password": "Again-Pass9"}
-    ).status_code == 400
+    assert (
+        client.post(
+            "/api/v1/auth/password/reset", json={"token": token, "new_password": "Again-Pass9"}
+        ).status_code
+        == 400
+    )
     # 重置会吊销旧 Token
     assert client.get("/api/v1/auth/me", headers=bearer("bob-token")).status_code == 401
 
 
 def test_expired_reset_token_is_rejected(client, enforced, db_factory):
     with patch.object(
-        service, "get_settings", return_value=ENFORCED.model_copy(update={"auth_dev_reveal_reset_token": True})
+        service,
+        "get_settings",
+        return_value=ENFORCED.model_copy(update={"auth_dev_reveal_reset_token": True}),
     ):
-        token = client.post(
-            "/api/v1/auth/password/forgot", json={"email": "bob@corp"}
-        ).json()["dev_reset_token"]
+        token = client.post("/api/v1/auth/password/forgot", json={"email": "bob@corp"}).json()[
+            "dev_reset_token"
+        ]
     with db_factory.begin() as db:
         record = db.scalar(select(PasswordReset))
         record.expires_at = datetime.now() - timedelta(minutes=1)
-    assert client.post(
-        "/api/v1/auth/password/reset", json={"token": token, "new_password": "Later-Pass9"}
-    ).status_code == 400
+    assert (
+        client.post(
+            "/api/v1/auth/password/reset", json={"token": token, "new_password": "Later-Pass9"}
+        ).status_code
+        == 400
+    )
 
 
 # ---------- 登录状态清理与审计导出/保留 ----------
@@ -266,7 +289,9 @@ def test_prune_login_states_removes_consumed_and_expired(client, enforced, db_fa
         db.add_all(
             [
                 OidcLoginState(state="used", nonce="n", consumed_at=datetime.now()),
-                OidcLoginState(state="old", nonce="n", created_at=datetime.now() - timedelta(minutes=30)),
+                OidcLoginState(
+                    state="old", nonce="n", created_at=datetime.now() - timedelta(minutes=30)
+                ),
                 OidcLoginState(state="fresh", nonce="n", created_at=datetime.now()),
             ]
         )
@@ -289,9 +314,10 @@ def test_audit_export_respects_tenant_and_format(client, enforced, db_factory):
         "/api/v1/admin/audit-logs/export?format=json", headers=bearer("admin-token")
     ).json()
     assert json_rows and json_rows[0]["action"] == "kb.create"
-    assert client.get(
-        "/api/v1/admin/audit-logs/export", headers=bearer("bob-token")
-    ).status_code == 403
+    assert (
+        client.get("/api/v1/admin/audit-logs/export", headers=bearer("bob-token")).status_code
+        == 403
+    )
 
 
 def test_audit_entries_are_stamped_with_the_api_clock(client, enforced, db_factory):
@@ -304,7 +330,11 @@ def test_audit_entries_are_stamped_with_the_api_clock(client, enforced, db_facto
 
 def test_audit_retention_deletes_only_old_rows(client, enforced, db_factory):
     with db_factory.begin() as db:
-        db.add(AuditLog(actor_email="a", action="kb.create", created_at=datetime.now() - timedelta(days=400)))
+        db.add(
+            AuditLog(
+                actor_email="a", action="kb.create", created_at=datetime.now() - timedelta(days=400)
+            )
+        )
         db.add(AuditLog(actor_email="a", action="kb.create", created_at=datetime.now()))
     with db_factory.begin() as db:
         removed = prune_audit(db, datetime.now() - timedelta(days=180))

@@ -1,3 +1,6 @@
+# 中文导读：
+# 以临时数据验证知识库管理及清理行为，涉及真实数据库、文件与向量；这不代表模型编码链路已被测试
+
 """Live, disposable KB lifecycle check; run only against a development instance.
 
 Uses real MySQL, Milvus, storage and bearer authentication through TestClient.

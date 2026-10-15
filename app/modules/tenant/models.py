@@ -1,3 +1,6 @@
+# 中文导读：
+# 租户数据模型：承载知识库与成员的空间隔离；用户和知识库的租户关系必须参与服务端授权
+
 """Tenants isolate knowledge bases and users from each other."""
 
 from datetime import datetime

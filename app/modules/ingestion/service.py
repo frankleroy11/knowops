@@ -1,3 +1,7 @@
+# 中文导读：
+# 异步解析业务：锁定版本、检查重复执行并替换文本块；失败记录进入版本状态
+# 解析完成只代表正文可用，不等于向量索引完成
+
 from sqlalchemy import delete, select
 
 from app.adapters.storage import LocalStorage
@@ -7,6 +11,7 @@ from app.modules.ingestion.parser import parse_chunks
 from app.modules.knowledge.models import Chunk, DocumentVersion
 
 
+# 解析任务按版本执行并处理重复投递；切分策略来自版本快照，避免配置变化悄悄改变历史版本。
 def process_version(version_id: int):
     # Lock the version for the transaction: duplicate deliveries serialize.
     # This first implementation suits bounded local files; large files need leases/staged batches.

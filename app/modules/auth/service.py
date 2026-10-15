@@ -1,3 +1,7 @@
+# 中文导读：
+# 身份认证与权限业务：解析令牌、检查租户和知识库访问范围、维护密码及二次验证
+# 授权必须在后端执行，令牌还需检查有效期与撤销状态
+
 """Authorization rules: who may read or write which knowledge base.
 
 `AUTH_MODE=off` keeps the historical single-user behaviour: every request is the
@@ -10,7 +14,7 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 
 from fastapi import HTTPException
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -112,12 +116,17 @@ def list_users(db: Session) -> list[User]:
     return list(db.scalars(select(User).order_by(User.id)))
 
 
+# 管理页统计“仍可登录”的 Token：同时排除已吊销和已过期的记录。
 def active_token_count(db: Session, user_id: int) -> int:
     return (
         db.scalar(
             select(func.count())
             .select_from(ApiToken)
-            .where(ApiToken.user_id == user_id, ApiToken.revoked_at.is_(None))
+            .where(
+                ApiToken.user_id == user_id,
+                ApiToken.revoked_at.is_(None),
+                or_(ApiToken.expires_at.is_(None), ApiToken.expires_at > datetime.now()),
+            )
         )
         or 0
     )
@@ -412,13 +421,10 @@ def clear_login_attempts(db: Session, email: str, ip: str = "") -> None:
     几次输错口令就会把整个出口锁到窗口结束。取舍是：攻击者若已掌握一个有效账号，
     可通过一次成功登录重置该 IP 的计数——但此时它已不再是"盲撞库"场景。
     """
+    # 成功登录仅清除当前账号的失败记录，不能替其他账号清除 IP 限流。
     conditions = [LoginAttempt.email == (email or "").strip().lower()]
     if ip:
-        from sqlalchemy import or_
-
-        conditions = [
-            or_(LoginAttempt.email == (email or "").strip().lower(), LoginAttempt.ip == ip)
-        ]
+        conditions.append(LoginAttempt.ip == ip)
     db.execute(delete(LoginAttempt).where(*conditions))
     db.commit()
 
@@ -497,6 +503,11 @@ def set_password(db: Session, user: User, password: str, actor=None) -> User:
     validate_password(password, user=user, db=db)
     remember_password(db, user)
     user.password_hash = hash_password(password)
+    # 自助修改和管理员重置共用这条路径，密码更新后统一吊销旧登录凭据。
+    for token in db.scalars(
+        select(ApiToken).where(ApiToken.user_id == user.id, ApiToken.revoked_at.is_(None))
+    ):
+        token.revoked_at = datetime.now()
     user.failed_logins = 0
     user.locked_until = None
     db.commit()

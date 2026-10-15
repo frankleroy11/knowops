@@ -1,3 +1,6 @@
+# 中文导读：
+# 分析已保存候选的重排表现与文本窗口，属于开发诊断，不能据此宣称独立盲测效果
+
 """Audit stored dev candidates and compare label-independent token-window scoring."""
 
 import hashlib

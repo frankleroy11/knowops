@@ -1,3 +1,6 @@
+# 中文导读：
+# 对已保存评测结果重新计算证据指标，不重新调用模型；解释结果时需区分评分规则变化与模型变化
+
 """Recalculate paired dev metrics on frozen candidates, without model calls."""
 
 import hashlib

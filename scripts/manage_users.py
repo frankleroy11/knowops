@@ -1,3 +1,7 @@
+# 中文导读：
+# 账号管理命令行工具，会实际修改账号、权限或令牌
+# 签发时输出的原始令牌属于敏感凭据，不应写入公开日志
+
 """User, token and knowledge-base membership administration (P0).
 
 Run against the configured MySQL database, after `alembic upgrade head`:

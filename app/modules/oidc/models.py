@@ -1,3 +1,6 @@
+# 中文导读：
+# OIDC 登录状态表：保存一次性 state 与 nonce，供回调绑定发起请求并限制有效时间
+
 """Single-use OIDC login state, stored durably so several workers can serve the flow."""
 
 from datetime import datetime

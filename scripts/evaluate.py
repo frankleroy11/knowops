@@ -1,3 +1,6 @@
+# 中文导读：
+# 小规模演示评测，会创建并保留示例知识库数据；结果用于开发观察，不能外推为生产质量
+
 """Reproducible small-sample RAG evaluation. Creates and retains isolated demo data."""
 
 import argparse

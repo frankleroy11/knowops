@@ -1,3 +1,7 @@
+# 中文导读：
+# 可选的本地交叉编码重排：对召回候选重新打分后截取结果
+# 重排分数用于排序，不代表答案正确的概率
+
 """Optional local cross-encoder; normalized scores are ranking scores, not probabilities."""
 
 import math
@@ -70,6 +74,7 @@ def select_ranked(hits, scores, top_k, max_per_document=0):
     return selected + skipped[: top_k - len(selected)]
 
 
+# 重排只作用于已召回候选，不能补回第一阶段完全没有召回的文档。
 def rerank_hits(query, hits, top_k, max_per_document=0):
     if not hits:
         return []

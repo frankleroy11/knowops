@@ -279,7 +279,7 @@ def test_user_tenant_can_only_be_changed_by_platform_admin(client, enforced):
         "/api/v1/admin/users/3", json={"tenant_id": 2}, headers=auth("platform")
     )
     assert moved.status_code == 200 and moved.json()["tenant_id"] == 2
-    assert client.get("/api/v1/knowledge-bases", headers=auth("t1user")).json() == []
+    assert client.get("/api/v1/knowledge-bases", headers=auth("t1user")).status_code == 401
 
 
 def test_knowledge_base_creation_targets_a_tenant(client, enforced):

@@ -1,3 +1,7 @@
+# 中文导读：
+# 身份令牌验证：选择公钥并检查签名、签发方、受众、有效期与 nonce
+# 读取 JWT 内容并不等于验证通过
+
 """Minimal OIDC ID-token verification on top of `cryptography`.
 
 PyJWT/python-jose are not installed and packages cannot be added offline, so the
@@ -67,6 +71,7 @@ def public_key_from_jwk(jwk: dict):
     return rsa.RSAPublicNumbers(exponent, modulus).public_key()
 
 
+# 按令牌标识选择匹配公钥，未知密钥需要由上层刷新公钥集后重试。
 def select_jwk(jwks: dict, kid: str | None) -> dict:
     keys = jwks.get("keys") or []
     if kid:
@@ -79,6 +84,7 @@ def select_jwk(jwks: dict, kid: str | None) -> dict:
     raise UnknownKeyError("无法确定签名密钥")
 
 
+# 完整验证签名与身份声明；只有全部检查通过才可据此建立本地登录态。
 def verify_id_token(
     token: str,
     jwks: dict,

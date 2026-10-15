@@ -1,3 +1,7 @@
+# 中文导读：
+# 读取和验证版本化证据标注，检查事实覆盖
+# 标注候选与规范语料需分开维护，不能为了提高指标直接改写证据
+
 """Versioned, source-grounded alternatives; canonical labels remain unchanged."""
 
 import json

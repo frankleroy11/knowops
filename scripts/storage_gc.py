@@ -1,3 +1,6 @@
+# 中文导读：
+# 识别未被数据库引用的本地文件，默认预览；只有显式清理才删除，不能把仍有引用的文件作为孤儿处理
+
 """Find (and optionally remove) uploaded files no longer referenced by any version.
 
 DB 行删除时不会自动清理 `storage/` 下的文件，所以历史上会积累孤儿文件。

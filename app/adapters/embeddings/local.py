@@ -1,3 +1,6 @@
+# 中文导读：
+# 本地嵌入模型适配器：按需加载并缓存模型，避免启动 API 时立即占用模型内存；设备选择和离线加载由配置控制
+
 """Lazy local BGE-M3 loading; no network/model work during API startup."""
 
 import os
@@ -49,6 +52,7 @@ class LocalEmbedder:
         ).tolist()
 
 
+# 复用缓存的编码器，避免每次请求都重新加载大模型。
 @lru_cache
 def get_embedder():
     return LocalEmbedder()

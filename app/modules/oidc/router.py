@@ -1,3 +1,6 @@
+# 中文导读：
+# 单点登录入口与回调：发起授权、验证回调并建立本地会话；登出地址由服务端配置和令牌上下文决定
+
 """OIDC authorization-code login endpoints."""
 
 from fastapi import APIRouter, HTTPException

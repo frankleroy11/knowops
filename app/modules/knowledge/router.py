@@ -1,3 +1,7 @@
+# 中文导读：
+# 知识库与文档管理接口：上传、版本、审核、重试及成员授权
+# 上传保存文件后投递异步任务，响应成功不代表文档已经可问答
+
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Response, UploadFile

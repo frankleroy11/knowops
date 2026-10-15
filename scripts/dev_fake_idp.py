@@ -1,3 +1,6 @@
+# 中文导读：
+# 本地开发用模拟身份提供方，便于测试 OIDC 跳转和令牌验证；不得作为生产身份服务
+
 """Local fake OIDC provider for end-to-end development checks (never for production).
 
 Run it next to the API to exercise the real HTTP authorization-code flow:

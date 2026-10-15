@@ -1,3 +1,7 @@
+# 中文导读：
+# FastAPI 应用入口：汇总业务路由，并在前端构建产物存在时挂载页面
+# 任务解析和向量化由独立 Celery Worker 执行
+
 from fastapi import FastAPI
 
 from app.core.config import get_settings

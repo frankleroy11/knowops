@@ -1,3 +1,6 @@
+# 中文导读：
+# 存活与就绪探针：存活表示进程可响应，就绪还需检查依赖服务；依赖不可用时返回失败状态
+
 from uuid import uuid4
 
 from fastapi import APIRouter

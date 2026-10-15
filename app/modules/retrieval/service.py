@@ -1,3 +1,7 @@
+# 中文导读：
+# 向量索引业务：读取文本块、编码并按块标识写入 Milvus，再更新数据库状态
+# 外部模型与向量写入在数据库锁之外执行，失败状态阻止残留向量参与检索
+
 """Embed and upsert one document version.
 
 Database transactions are deliberately short: inputs are snapshotted first and results
@@ -36,6 +40,7 @@ def _job(db: Session, version_id: int) -> VectorIndex:
     return job
 
 
+# 先记录索引中状态，再执行耗时编码与向量写入；最终成功才把数据库状态标为可用。
 def index_version(version_id):
     with SessionLocal.begin() as db:
         version = db.scalar(

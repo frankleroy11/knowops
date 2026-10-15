@@ -1,3 +1,7 @@
+# 中文导读：
+# 数据库迁移：文档版本的切分策略快照
+# upgrade 应用本次结构变更；downgrade 回退结构可能丢失对应字段或表中的数据，执行前需备份
+
 """Persist the chunk policy for reproducible version ingestion."""
 
 import sqlalchemy as sa

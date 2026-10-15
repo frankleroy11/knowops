@@ -1,3 +1,7 @@
+# 中文导读：
+# 请求身份对象：集中描述用户、租户和角色
+# 平台管理员与租户管理员权限不同，不能只凭 admin 字符串判断跨租户能力
+
 """The caller identity used for authorization decisions."""
 
 from dataclasses import dataclass

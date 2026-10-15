@@ -1,3 +1,7 @@
+# 中文导读：
+# 集中读取环境配置并缓存设置对象
+# 认证、公开注册和模型参数均在这里定义；本地环境文件中的密钥不应提交到仓库
+
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -26,6 +30,7 @@ class Settings(BaseSettings):
     # off = 单机开发模式，所有请求视为本地管理员（保持历史行为）
     # enforced = 必须携带 Authorization: Bearer <token>，否则 401
     auth_mode: str = "off"
+    public_registration_enabled: bool = False
 
     # --- OIDC 单点登录（可选）---
     oidc_enabled: bool = False

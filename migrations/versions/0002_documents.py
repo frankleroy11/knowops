@@ -1,3 +1,7 @@
+# 中文导读：
+# 数据库迁移：文档、版本与文本块
+# upgrade 应用本次结构变更；downgrade 回退结构可能丢失对应字段或表中的数据，执行前需备份
+
 """Documents, versions and parsed chunks."""
 
 import sqlalchemy as sa

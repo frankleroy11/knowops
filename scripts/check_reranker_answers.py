@@ -1,3 +1,6 @@
+# 中文导读：
+# 对重排后的回答进行开发诊断；模型回答对照不等于经过人工标注的准确率评估
+
 """Diagnostic generation comparison on dev regression cases; not an accuracy benchmark."""
 
 import json

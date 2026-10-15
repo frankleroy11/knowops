@@ -1,3 +1,7 @@
+# 中文导读：
+# 账号、安全凭据和知识库成员关系的数据模型
+# 访问令牌保存摘要；密码、重置凭据、登录尝试和二次验证分别维护生命周期
+
 """Identity tables: users, API tokens and per-knowledge-base membership."""
 
 from datetime import datetime

@@ -1,3 +1,6 @@
+# 中文导读：
+# 审计日志表：保存操作者、对象与操作快照，供管理端追溯；业务对象删除后仍需保留操作记录
+
 """Audit trail for every state-changing action."""
 
 from datetime import datetime

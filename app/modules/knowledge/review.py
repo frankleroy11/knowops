@@ -1,3 +1,6 @@
+# 中文导读：
+# 审核与发布状态机：待审核版本保留旧版本的可用性；通过、拒绝、下架和发布分别改变业务状态，检索还需检查索引是否就绪
+
 """Submit → review → publish workflow, plus retire (下架) semantics.
 
 Retrieval only serves a version when it is parsed, indexed, `is_current` and
@@ -39,6 +42,7 @@ def current_version(db: Session, document_id: int) -> DocumentVersion | None:
     )
 
 
+# 选择文档的当前版本；真正进入检索还需同时满足审核与索引条件。
 def publish(db: Session, document: Document, version: DocumentVersion) -> None:
     for other in db.scalars(
         select(DocumentVersion).where(
@@ -86,6 +90,7 @@ def guard_reviewer(principal, version: DocumentVersion) -> None:
         raise HTTPException(409, "不能审核自己提交的版本，请由其他成员处理")
 
 
+# 审核通过后更新发布状态；审核者身份限制仍由服务端检查。
 def approve(db: Session, principal, version: DocumentVersion, note: str = "") -> DocumentVersion:
     guard_reviewer(principal, version)
     if version.review_status == REVIEW_APPROVED:
@@ -108,6 +113,7 @@ def approve(db: Session, principal, version: DocumentVersion, note: str = "") ->
     return version
 
 
+# 拒绝本次版本，避免把未通过审核的内容暴露给检索。
 def reject(db: Session, principal, version: DocumentVersion, note: str = "") -> DocumentVersion:
     guard_reviewer(principal, version)
     if version.review_status == REVIEW_REJECTED:
@@ -130,6 +136,7 @@ def reject(db: Session, principal, version: DocumentVersion, note: str = "") -> 
     return version
 
 
+# 下架后清除文档当前版本，已有向量也不能绕过业务过滤重新进入问答。
 def retire(db: Session, principal, document: Document) -> None:
     version = current_version(db, document.id)
     if version is not None:

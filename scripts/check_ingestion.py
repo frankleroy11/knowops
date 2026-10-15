@@ -1,3 +1,7 @@
+# 中文导读：
+# 真实上传与异步解析验收，会写入数据库和文件
+# 脚本顶层包含执行逻辑，不要通过导入来读取工具函数
+
 """Live HTTP / Celery / MySQL verification; leaves a named demo knowledge base."""
 
 import sys

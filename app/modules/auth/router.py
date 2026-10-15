@@ -1,9 +1,14 @@
+# 中文导读：
+# 登录、注册、密码和成员管理接口
+# 请求模型负责输入约束，业务层负责权限与事务；公开注册是否开放由配置决定
+
 """Current-identity endpoint and administrator user management."""
 
+import re
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Header, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.db.deps import DB
 from app.modules.audit import service as audit
@@ -40,6 +45,8 @@ class UserOut(BaseModel):
     tenant_id: int | None
     is_active: bool
     active_tokens: int
+    password_configured: bool = False
+    locked_until: str | None = None
 
 
 class UserCreate(BaseModel):
@@ -48,6 +55,7 @@ class UserCreate(BaseModel):
     display_name: str = Field(default="", max_length=128)
     tenant_id: int | None = None
     issue_token: bool = False
+    password: str | None = Field(default=None, min_length=8, max_length=256)
 
 
 class UserCreated(UserOut):
@@ -55,6 +63,7 @@ class UserCreated(UserOut):
 
 
 class UserPatch(BaseModel):
+    display_name: str = Field(default="", max_length=128)
     role: Role | None = None
     is_active: bool | None = None
     tenant_id: int | None = None
@@ -75,6 +84,8 @@ def user_out(db, user: User) -> UserOut:
         tenant_id=user.tenant_id,
         is_active=user.is_active,
         active_tokens=service.active_token_count(db, user.id),
+        password_configured=bool(user.password_hash),
+        locked_until=user.locked_until.isoformat() if user.locked_until else None,
     )
 
 
@@ -211,17 +222,47 @@ def rotate_token(
 
 
 @router.get("/admin/users", response_model=list[UserOut])
-def list_users(db: DB, principal: AdminPrincipal):
-    users = service.list_users(db)
+def list_users(
+    db: DB,
+    principal: AdminPrincipal,
+    q: str = "",
+    role: Role | None = None,
+    active: bool | None = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    from sqlalchemy import or_, select
+
+    # 在数据库查询阶段限制租户，再搜索和分页，避免加载其他空间用户。
+    query = select(User)
     if not principal.is_platform_admin:
-        users = [user for user in users if user.tenant_id == principal.tenant_id]
+        query = query.where(User.tenant_id == principal.tenant_id)
+    if q.strip():
+        # Literal substring search, not SQL wildcard search.
+        query = query.where(
+            or_(
+                User.email.contains(q.strip(), autoescape=True),
+                User.display_name.contains(q.strip(), autoescape=True),
+            )
+        )
+    if role is not None:
+        query = query.where(User.role == role)
+    if active is not None:
+        query = query.where(User.is_active == active)
+    users = db.scalars(
+        query.order_by(User.id).offset(max(0, offset)).limit(min(max(1, limit), 100))
+    )
     return [user_out(db, user) for user in users]
 
 
 @router.post("/admin/users", response_model=UserCreated, status_code=201)
 def create_user(body: UserCreate, db: DB, principal: AdminPrincipal):
     tenant_id = resolve_tenant_id(db, principal, body.tenant_id)
+    if body.password:
+        service.validate_password(body.password, user=User(email=body.email.strip().lower()))
     user = service.create_user(db, body.email, body.role, body.display_name, tenant_id)
+    if body.password:
+        service.set_password(db, user, body.password, actor=principal)
     raw = service.issue_token(db, user, "admin-api") if body.issue_token else None
     audit.record(
         db,
@@ -236,27 +277,10 @@ def create_user(body: UserCreate, db: DB, principal: AdminPrincipal):
 
 @router.patch("/admin/users/{user_id}", response_model=UserOut)
 def patch_user(user_id: int, body: UserPatch, db: DB, principal: AdminPrincipal):
-    user = get_user(db, user_id)
-    if not principal.is_platform_admin and user.tenant_id != principal.tenant_id:
-        raise HTTPException(404, "用户不存在")
-    demoting_self = user.id == principal.id and (
-        (body.role is not None and body.role != "admin") or body.is_active is False
-    )
-    if demoting_self:
-        raise HTTPException(409, "不能降低或停用当前登录的管理员自己")
-    changes = []
-    if body.role is not None:
-        changes.append(f"role={service.set_user_role(db, user, body.role).role}")
-    if body.is_active is not None:
-        changes.append(f"is_active={service.set_user_active(db, user, body.is_active).is_active}")
-    if "tenant_id" in body.model_fields_set:
-        if not principal.is_platform_admin:
-            raise HTTPException(403, "只有平台管理员可以调整用户所属租户")
-        target = body.tenant_id
-        if target is not None:
-            tenants.get_tenant(db, target)
-        changes.append(f"tenant={service.set_user_tenant(db, user, target).tenant_id}")
-    audit.record(db, principal, "user.update", "user", user.id, " ".join(changes) or "no-change")
+    from app.modules.auth import accounts
+
+    # 只传客户端明确提供的字段：未填写的字段保持原值，不套用模型默认值。
+    user = accounts.update(db, principal, user_id, body.model_dump(exclude_unset=True))
     return user_out(db, user)
 
 
@@ -312,7 +336,9 @@ def forgot_password(body: ResetRequest, db: DB):
         raw = service.create_reset_token(db, user)
         if service.get_settings().auth_dev_reveal_reset_token:
             token = raw
-    payload = {"detail": "如果该邮箱存在，重置指引已发出。"}
+    payload = {
+        "detail": "本演示未配置邮件发送，请联系空间管理员重置密码；如已收到重置令牌，可继续填写。"
+    }
     if token:
         payload["dev_reset_token"] = token
     return payload
@@ -367,3 +393,58 @@ def reset_password(user_id: int, body: PasswordReset, db: DB, principal: AdminPr
         raise HTTPException(404, "用户不存在")
     service.set_password(db, user, body.password, actor=principal)
     return {"user_id": user.id, "ok": True}
+
+
+# 禁止额外字段，拒绝通过 role、tenant_id 等参数给公开注册提权。
+class RegisterIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(min_length=5, max_length=255)
+    display_name: str = Field(min_length=2, max_length=60)
+    password: str = Field(min_length=8, max_length=256)
+    confirm_password: str = Field(min_length=8, max_length=256)
+
+    @field_validator("email")
+    @classmethod
+    def valid_email(cls, value):
+        value = value.strip().lower()
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
+            raise ValueError("请输入有效邮箱")
+        return value
+
+    @field_validator("display_name")
+    @classmethod
+    def valid_name(cls, value):
+        value = value.strip()
+        if len(value) < 2:
+            raise ValueError("显示名至少两个字符")
+        return value
+
+
+# 登录页无需身份即可查询入口开关；实际注册接口还会再次验证配置。
+@router.get("/auth/options")
+def options():
+    return {
+        "registration_enabled": service.auth_mode() == service.ENFORCED
+        and service.get_settings().public_registration_enabled
+    }
+
+
+@router.post("/auth/register", status_code=201)
+def register(body: RegisterIn, db: DB, request: Request):
+    from app.modules.auth import accounts
+
+    # 免鉴权模式下所有请求都是本地管理员，因此不允许用它模拟真实注册。
+    require_realm("注册")
+    if body.password != body.confirm_password:
+        raise HTTPException(422, "两次密码不一致")
+    user = accounts.register(
+        db,
+        body.email,
+        body.password,
+        body.display_name,
+        request.client.host if request.client else "",
+    )
+    return {
+        "email": user.email,
+        "detail": "注册成功，已创建独立演示空间，请登录。邮箱未验证，仅供演示使用。",
+    }

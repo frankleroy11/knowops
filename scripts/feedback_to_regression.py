@@ -1,3 +1,6 @@
+# 中文导读：
+# 将用户反馈整理为待审查回归候选；反馈不自动获得标准答案或正确性标签
+
 """Turn online feedback into offline regression candidates.
 
 差评（`rating="not_helpful"`）本身就是"这条回答有问题"的线上证据。本脚本把它们整理成
