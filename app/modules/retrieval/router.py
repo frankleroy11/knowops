@@ -4,9 +4,14 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.adapters.embeddings.local import get_embedder
 from app.adapters.vectorstore.milvus import MilvusStore, collection_name
+from app.db.deps import DB
+from app.modules.auth import service
+from app.modules.auth.deps import CurrentPrincipal
+from app.modules.auth.principal import Principal
 from app.modules.knowledge.models import (
     Chunk,
     Document,
@@ -14,7 +19,6 @@ from app.modules.knowledge.models import (
     KnowledgeBase,
     VectorIndex,
 )
-from app.modules.knowledge.router import DB
 
 router = APIRouter(tags=["语义检索"])
 
@@ -42,12 +46,16 @@ class Query(BaseModel):
 
 
 @router.post("/document-versions/{version_id}/index", status_code=202)
-def enqueue_index(version_id: int, db: DB):
+def enqueue_index(version_id: int, db: DB, principal: CurrentPrincipal):
     from app.workers.celery_app import index_document
 
     version = db.get(DocumentVersion, version_id)
     if version is None:
         raise HTTPException(404, "版本不存在")
+    document = db.get(Document, version.document_id)
+    if document is None:
+        raise HTTPException(404, "文档不存在")
+    service.require_kb(db, principal, document.knowledge_base_id, "write")
     if version.status != "parsed":
         raise HTTPException(409, "请先完成解析")
     try:
@@ -58,9 +66,14 @@ def enqueue_index(version_id: int, db: DB):
 
 
 @router.get("/document-versions/{version_id}/index")
-def index_status(version_id: int, db: DB):
-    if db.get(DocumentVersion, version_id) is None:
+def index_status(version_id: int, db: DB, principal: CurrentPrincipal):
+    version = db.get(DocumentVersion, version_id)
+    if version is None:
         raise HTTPException(404, "版本不存在")
+    document = db.get(Document, version.document_id)
+    if document is None:
+        raise HTTPException(404, "文档不存在")
+    service.require_kb(db, principal, document.knowledge_base_id, "read")
     job = db.scalar(
         select(VectorIndex).where(
             VectorIndex.version_id == version_id, VectorIndex.collection == collection_name()
@@ -75,15 +88,20 @@ def index_status(version_id: int, db: DB):
     }
 
 
-@router.post("/search")
-def search(body: Query, db: DB):
+def search(body: Query, db: Session, principal: Principal | None = None):
+    """Authorized semantic search.
+
+    `scope="all"` never means "every row": it expands only to the knowledge bases
+    the caller may read, and an explicitly requested knowledge base without access
+    is rejected with 403 instead of being silently filtered out.
+    """
+    principal = service.default_principal() if principal is None else principal
     if not body.query.strip():
         raise HTTPException(422, "查询不能为空")
     if body.scope == "all":
-        kb_ids = list(db.scalars(select(KnowledgeBase.id)))
+        kb_ids = service.authorized_kb_ids(db, principal)
     else:
-        if db.get(KnowledgeBase, body.knowledge_base_id) is None:
-            raise HTTPException(404, "知识库不存在")
+        service.require_kb(db, principal, body.knowledge_base_id, "read")
         kb_ids = [body.knowledge_base_id]
     if not kb_ids:
         return {
@@ -114,6 +132,8 @@ def search(body: Query, db: DB):
                     Chunk.id == hit["chunk_id"],
                     Document.knowledge_base_id.in_(kb_ids),
                     DocumentVersion.status == "parsed",
+                    DocumentVersion.is_current.is_(True),
+                    DocumentVersion.review_status == "approved",
                     VectorIndex.collection == collection_name(),
                     VectorIndex.status == "indexed",
                 )
@@ -151,3 +171,8 @@ def search(body: Query, db: DB):
     finally:
         if store:
             store.close()
+
+
+@router.post("/search")
+def search_endpoint(body: Query, db: DB, principal: CurrentPrincipal):
+    return search(body, db, principal)

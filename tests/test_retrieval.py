@@ -76,6 +76,44 @@ def test_failed_index_retry_and_idempotent_keys(sessions):
             assert len(list(db.scalars(select(VectorIndex)))) == 1
 
 
+def test_indexing_commits_progress_before_embedding(sessions):
+    """During the embedding call another session must already see status="indexing".
+
+    The previous implementation kept one transaction (with FOR UPDATE) open across the
+    embedding call, so no other session could observe the row or write to the version.
+    """
+    from app.modules.retrieval import service
+
+    observed = {}
+
+    class Embedder:
+        def encode(self, texts):
+            with sessions() as db:
+                job = db.scalar(select(VectorIndex))
+                observed["status"] = job.status if job else None
+            return [[1.0, 0.0] for _ in texts]
+
+    class Store:
+        def ensure(self):
+            pass
+
+        def upsert(self, rows):
+            pass
+
+        def close(self):
+            pass
+
+    with (
+        patch.object(service, "SessionLocal", sessions),
+        patch.object(service, "MilvusStore", Store),
+        patch.object(service, "get_embedder", return_value=Embedder()),
+    ):
+        assert service.index_version(1) == {"status": "indexed", "chunks": 1}
+    assert observed["status"] == "indexing"
+    with sessions() as db:
+        assert db.scalar(select(VectorIndex)).status == "indexed"
+
+
 def test_collection_changes_with_embedding_policy():
     from app.core.config import Settings
 

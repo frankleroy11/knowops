@@ -1,18 +1,33 @@
 """Lazy local BGE-M3 loading; no network/model work during API startup."""
 
+import os
 from functools import lru_cache
 
 from app.core.config import get_settings
+
+
+def apply_offline_env(settings) -> None:
+    """Pin Hugging Face to the local cache when the model is already downloaded.
+
+    Otherwise sentence-transformers issues a hub HEAD request on every model load,
+    which on an offline machine stalls for minutes - and the caller may be holding a
+    database lock meanwhile. Opt in with EMBEDDING_OFFLINE=1.
+    """
+    if not settings.embedding_offline:
+        return
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 
 class LocalEmbedder:
     normalized = True
 
     def __init__(self):
+        s = get_settings()
+        apply_offline_env(s)
         import torch
         from sentence_transformers import SentenceTransformer
 
-        s = get_settings()
         if s.embedder_provider != "bge_m3":
             raise ValueError("Only real BGE-M3 embeddings are supported")
         self.model_name = s.embedding_model

@@ -5,7 +5,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.adapters.llm.qwen import LLMUnavailable, generate_grounded_answer
-from app.modules.knowledge.router import DB
+from app.db.deps import DB
+from app.modules.auth.deps import CurrentPrincipal
 from app.modules.retrieval.context import MAX_CONTEXT_CHUNKS, expand_neighbors
 from app.modules.retrieval.router import Query, search
 
@@ -140,7 +141,7 @@ def answer_question(body: AskRequest, hits: list[dict]):
 
 
 @router.post("/chat/ask")
-def ask(body: AskRequest, db: DB):
+def ask(body: AskRequest, db: DB, principal: CurrentPrincipal):
     if not body.question.strip():
         raise HTTPException(422, "问题不能为空")
     started = perf_counter()
@@ -155,6 +156,7 @@ def ask(body: AskRequest, db: DB):
             max_per_document=body.max_per_document,
         ),
         db,
+        principal,
     )
     hits = expand_neighbors(result["hits"], db) if body.expand_context else result["hits"]
     retrieved = perf_counter()
