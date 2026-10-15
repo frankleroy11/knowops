@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pymilvus import MilvusClient
@@ -32,7 +34,7 @@ def ready():
     except Exception:  # noqa: BLE001 - dependency probe must report degraded status
         checks["redis"] = "unavailable"
     try:
-        client = MilvusClient(uri=s.milvus_uri, timeout=3)
+        client = MilvusClient(uri=s.milvus_uri, timeout=3, alias=f"health-{uuid4().hex}")
         try:
             client.list_collections(timeout=3)
         finally:
