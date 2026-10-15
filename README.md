@@ -1,8 +1,10 @@
 # KnowOps 企业知识库问答平台
 
-KnowOps 将企业文档上传、异步解析、向量检索、审核发布和带引用问答连成一条可验证的 RAG 流程。后端使用 FastAPI、MySQL、Redis、Celery、Milvus；本地 BGE-M3 负责嵌入，Qwen API 负责回答。Vue 提供用户工作台与管理员控制台。
+KnowOps 将企业文档上传、异步解析、向量检索、审核发布和带引用问答连成一条可验证的 RAG 流程。后端使用 FastAPI、MySQL、Redis、Celery、Milvus；本地 BGE-M3 负责嵌入，Qwen API 负责回答，LangChain Core 编排提示词、模型调用和严格 JSON 解析。Vue 提供用户工作台与管理员控制台。
 
 当前功能：统一/单库问答、按事实校验原文引用、多租户与知识库成员权限、密码/Token 登录、可选 OIDC/TOTP、文档版本审核与切换、失败定位与重试、知识库改名/删除、文档删除、审计和答案反馈、系统状态页。答案为单轮非流式；引用逐字匹配不等于语义正确，仍保留已知误拒答及评测失败案例。
+
+生成链路详见 [LangChain 接入说明](docs/langchain-generation.md)；检索权限、版本审核与引用校验仍由业务层执行。
 
 ## 快速启动（本机开发）
 
