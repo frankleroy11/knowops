@@ -328,6 +328,9 @@ def validate_password(password: str, user: User | None = None, db: Session | Non
     """口令复杂度 + 历史：长度、字母数字混合、不能是邮箱名、不能是弱口令、不能与最近 N 次重复。"""
     settings = get_settings()
     candidate = password or ""
+    # VARCHAR(255) 还需容纳 10 字符的格式前缀，避免数据库截断明文凭据。
+    if settings.password_storage == "plaintext" and len(candidate) > 245:
+        raise HTTPException(422, "明文演示模式密码最多 245 位")
     if len(candidate) < settings.password_min_length:
         raise HTTPException(422, f"密码至少 {settings.password_min_length} 位")
     if settings.password_require_mixed and not (
@@ -530,7 +533,7 @@ def change_password(db: Session, user: User, current_password: str, new_password
 
 @lru_cache(maxsize=1)
 def _dummy_password_hash() -> str:
-    """Keeps unknown-account logins as expensive as real ones."""
+    """未知账号也执行一次凭据验证；默认 scrypt 模式维持散列计算开销。"""
     return hash_password(secrets.token_urlsafe(24))
 
 
@@ -567,6 +570,13 @@ def authenticate_password(
         if not verify_totp(user.totp_secret, code, settings.totp_window):
             record_login_attempt(db, email, ip)
             raise HTTPException(401, "二次验证码不正确")
+    # 只有密码及二次验证全部通过才转换存储格式，失败登录不能改写凭据。
+    # 摘要不可逆，使用本次已验证的原密码完成明文迁移；切回 scrypt 同样逐次迁移。
+    plaintext = (user.password_hash or "").startswith("plaintext$")
+    # 超长历史密码继续验证原摘要，待用户改成可容纳长度后再转换。
+    can_store = settings.password_storage != "plaintext" or len(password) <= 245
+    if can_store and plaintext != (settings.password_storage == "plaintext"):
+        user.password_hash = hash_password(password)
     user.failed_logins = 0
     user.locked_until = None
     db.commit()

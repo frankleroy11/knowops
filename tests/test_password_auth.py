@@ -223,11 +223,36 @@ def test_admin_can_reset_a_password_inside_its_tenant(client, enforced, db_facto
 
 def test_password_login_is_unavailable_in_local_mode(client, db_factory):
     with patch.object(service, "get_settings", return_value=Settings(auth_mode="off")):
-        assert client.post(
-            "/api/v1/auth/password/login", json={"email": "bob@corp", "password": PASSWORD}
-        ).status_code == 404
+        assert (
+            client.post(
+                "/api/v1/auth/password/login", json={"email": "bob@corp", "password": PASSWORD}
+            ).status_code
+            == 404
+        )
 
 
 def test_accounts_without_a_password_cannot_log_in(client, enforced):
     response = login(client, email="sso@corp")
     assert response.status_code == 401
+
+
+def test_successful_login_migrates_storage_but_failure_does_not(
+    client, enforced, db_factory, monkeypatch
+):
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(ENFORCED, "password_storage", "plaintext")
+    monkeypatch.setattr(get_settings(), "password_storage", "plaintext")
+    with db_factory() as db:
+        original = db.get(User, 2).password_hash
+    assert login(client, password="wrong-password").status_code == 401
+    with db_factory() as db:
+        assert db.get(User, 2).password_hash == original
+    assert login(client).status_code == 200
+    with db_factory() as db:
+        assert db.get(User, 2).password_hash == "plaintext$" + PASSWORD
+    monkeypatch.setattr(ENFORCED, "password_storage", "scrypt")
+    monkeypatch.setattr(get_settings(), "password_storage", "scrypt")
+    assert login(client).status_code == 200
+    with db_factory() as db:
+        assert db.get(User, 2).password_hash.startswith("scrypt$")

@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     # --- 本地账号密码与 Token 生命周期 ---
     # 新签发 Token 的有效天数；0 表示不过期
     token_ttl_days: int = Field(default=30, ge=0, le=3650)
+    # 演示可选明文存储；仓库默认仍为 scrypt，本机可在 .env 显式启用 plaintext。
+    password_storage: Literal["scrypt", "plaintext"] = "scrypt"
     password_min_length: int = Field(default=8, ge=6, le=128)
     # 连续失败次数达到上限后锁定一段时间
     login_max_failures: int = Field(default=5, ge=1, le=100)

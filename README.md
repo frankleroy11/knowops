@@ -111,3 +111,17 @@ PYTHONPATH=. python scripts/check_release_flow.py --base-url http://127.0.0.1:80
 - Qwen 接收问题和所选切片正文；本次真实评测仅使用合成资料。
 
 详见 [部署、备份恢复和故障排查](docs/operations-runbook.md)、[文档管理](docs/document-operations.md)、[系统状态](docs/system-status.md)、[本次交付验收](docs/release-acceptance-20261015.md)。旧的阶段报告保留为历史证据，以这些当前文档及真实代码为准。
+
+## 本地演示明文密码
+
+在 `.env` 设置 `PASSWORD_STORAGE=plaintext` 并重启 API 后，新建／重设密码在 `users.password_hash` 中按 `plaintext$原密码` 保存。前缀只是格式标记，没有加密。密码历史也可能保存这种格式。已有 scrypt 摘要无法还原，账号在成功完成密码及二次验证登录后转换。切回 `scrypt` 后，成功登录或重设密码会转换回摘要；旧密码历史不会自动重写。
+
+此模式会让数据库和备份直接暴露密码，演示请使用独立测试密码。API 不返回密码字段，令牌仍保存摘要。仓库默认配置仍是 `scrypt`。
+
+## 最新演示交付
+
+- [2026-10-16 验收报告与演示步骤](docs/release-acceptance-20261016.md)
+- [当前架构与数据流](docs/architecture.md)
+- [后端中文阅读指南](docs/backend-code-reading-guide.md)
+
+本轮真实 Qwen 合成开发题启发式通过 4/5，保留报销凭证误拒答；不作为独立盲测正确率。

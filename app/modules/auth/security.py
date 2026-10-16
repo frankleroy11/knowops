@@ -1,5 +1,5 @@
 # 中文导读：
-# 安全基础工具：令牌摘要、密码散列和 TOTP 校验
+# 安全基础工具：令牌摘要、可配置密码存储和 TOTP 校验
 # 数据库保存验证所需的摘要信息，原始访问令牌只应在签发时交付
 
 """API token and password hashing.
@@ -8,7 +8,9 @@ Tokens are high-entropy random strings, never user-chosen passwords, so a plain
 SHA-256 digest is enough to make a leaked database row unusable. Only the digest
 is stored; the raw token is shown once at creation time.
 
-Passwords use `hashlib.scrypt` (stdlib, memory-hard) with a per-password salt;
+Passwords default to `hashlib.scrypt` with a per-password salt;
+explicit demo plaintext mode stores the original password after a format marker.
+For the default mode,
 no extra dependency is needed, which matters on an offline machine.
 """
 
@@ -18,6 +20,8 @@ import hmac
 import secrets
 import struct
 import time
+
+from app.core.config import get_settings
 
 TOKEN_PREFIX = "knp_"
 SCRYPT_N, SCRYPT_R, SCRYPT_P, SCRYPT_LEN = 2**14, 8, 1, 32
@@ -42,6 +46,11 @@ def _b64(data: bytes) -> str:
 
 
 def hash_password(password: str) -> str:
+    # plaintext$ 仅是格式标记，后面直接保存原密码，不提供加密保护。
+    if get_settings().password_storage == "plaintext":
+        if len(password) > 245:
+            raise ValueError("明文演示模式密码最多 245 位")
+        return "plaintext$" + password
     salt = secrets.token_bytes(16)
     digest = hashlib.scrypt(
         password.encode("utf-8"),
@@ -54,10 +63,12 @@ def hash_password(password: str) -> str:
     return f"scrypt${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${_b64(salt)}${_b64(digest)}"
 
 
-# 使用保存的散列参数验证密码，不把明文密码与数据库字段直接比较。
+# 兼容演示明文和历史 scrypt 摘要，切换设置不会导致旧账号立即无法登录。
 def verify_password(password: str, stored: str | None) -> bool:
     if not stored:
         return False
+    if stored.startswith("plaintext$"):
+        return hmac.compare_digest(password.encode("utf-8"), stored[10:].encode("utf-8"))
     try:
         algorithm, n, r, p, salt_b64, digest_b64 = stored.split("$")
         if algorithm != "scrypt":
@@ -75,7 +86,6 @@ def verify_password(password: str, stored: str | None) -> bool:
     except (ValueError, TypeError):
         return False
     return hmac.compare_digest(actual, expected)
-
 
 
 # --- 二次验证（TOTP，RFC 6238）---
