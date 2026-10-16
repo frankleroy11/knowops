@@ -13,7 +13,7 @@ const METHOD_KEY = 'knowops.login_method'
 
 const kbs = ref([]), selected = ref('all'), docs = ref([]), tab = ref('chat')
 const name = ref(''), description = ref(''), creating = ref(false), showCreate = ref(false)
-const uploading = ref(false), asking = ref(false), expandContext = ref(false)
+const uploading = ref(false), asking = ref(false), expandContext = ref(false), retrievalCount = ref(3)
 const question = ref(''), messages = ref([]), error = ref(''), notice = ref('')
 const page = ref(0), loading = ref(false), action = ref(null)
 
@@ -311,8 +311,8 @@ async function ask() {
   const text = question.value.trim(), id = selected.value, g = generation
   question.value = ''; messages.value.push({role: 'user', text}); asking.value = true; error.value = ''
   try {
-    const result = await api('/chat/ask', json({question: text, ...(id === 'all' ? {scope: 'all'} : {knowledge_base_id: id}), top_k: 3, expand_context: expandContext.value}))
-    if (g === generation) messages.value.push({role: 'assistant', text: result.answer, citations: result.citations, claims: result.claims, answerable: result.answerable, grounding_status: result.grounding_status, answer_source: result.answer_source})
+    const result = await api('/chat/ask', json({question: text, ...(id === 'all' ? {scope: 'all'} : {knowledge_base_id: id}), top_k: retrievalCount.value, expand_context: expandContext.value}))
+    if (g === generation) messages.value.push({role: 'assistant', text: result.answer, citations: result.citations, claims: result.claims, answerable: result.answerable, grounding_status: result.grounding_status, answer_source: result.answer_source, context_chunk_count: result.context_chunk_count, context_expanded: result.context_expanded})
   } catch (e) {
     if (g === generation) { question.value = text; fail(e) }
   } finally { asking.value = false; persistConversations() }
@@ -859,7 +859,10 @@ onUnmounted(() => clearInterval(timer))
       </section>
 
       <section v-else-if="tab==='chat'" class="chat">
+        <div class="retrieval-options">
+        <label class="context-option">召回片段数<select v-model.number="retrievalCount" :disabled="asking" aria-label="召回片段数"><option v-for="count in 8" :key="count" :value="count">{{count}} 段</option></select><small>默认 3 段，资料不全时可尝试 5 段</small></label>
         <label class="context-option"><input v-model="expandContext" type="checkbox" :disabled="asking">补充同文档资料<small>有助于查找前后条款，回答可能稍慢</small></label>
+        </div>
         <div class="conversation" aria-live="polite">
           <div v-if="!messages.length" class="welcome">
             <div class="hero-icon">✳</div>
@@ -868,6 +871,7 @@ onUnmounted(() => clearInterval(timer))
             <p>{{unified?'直接提问，系统从你有权访问的知识库检索，引用会标明所属知识库。':'向「'+kb.name+'」提问，答案会附上可核对的原文来源。'}}</p>
             <div class="suggestions">
               <button @click="question='在家办公如何连接公司内网？'">在家如何连接公司内网？ ↗</button>
+              <button @click="question='统一问答需要先选择知识库吗？'">统一问答需要先选择知识库吗？ ↗</button>
               <button v-if="canAuthor" @click="unified?showCreate=true:tab='docs'">{{unified?'创建知识库 ↗':'先上传一份文档 ↗'}}</button>
             </div>
             <small>每次提问独立检索；切换知识库会分别保留各自的问答记录。</small>
@@ -878,6 +882,7 @@ onUnmounted(() => clearInterval(timer))
               <b>{{m.role==='user'?'我的问题':'KnowOps'}}</b>
               <p>{{m.text}}</p>
               <span v-if="m.answer_source" class="badge">{{({faq:'标准问答',cache:'历史答案缓存',rag:'知识库生成'})[m.answer_source]}}</span>
+              <span v-if="Number.isInteger(m.context_chunk_count)" class="badge">参考 {{m.context_chunk_count}} 段资料{{m.context_expanded ? ' · 已启用相邻补充' : ''}}</span>
               <span v-if="m.answerable===false" class="badge">资料不足</span>
               <div v-if="m.citations?.length" class="sources">
                 <div class="eyebrow">参考来源 · {{m.citations.length}}</div>
