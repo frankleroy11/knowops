@@ -1,4 +1,5 @@
 <script setup>
+import {readAnswerStream} from './stream.js'
 import {ref, computed, onMounted, onUnmounted, watch, nextTick} from 'vue'
 import {
   createConversationPersistence,
@@ -14,6 +15,7 @@ const METHOD_KEY = 'knowops.login_method'
 const kbs = ref([]), selected = ref('all'), docs = ref([]), tab = ref('chat')
 const name = ref(''), description = ref(''), creating = ref(false), showCreate = ref(false)
 const uploading = ref(false), asking = ref(false), expandContext = ref(false), retrievalCount = ref(3)
+const streamStatus = ref('')
 const question = ref(''), messages = ref([]), error = ref(''), notice = ref('')
 const page = ref(0), loading = ref(false), action = ref(null)
 
@@ -310,12 +312,39 @@ async function ask() {
   if (!question.value.trim() || asking.value || !selected.value) return
   const text = question.value.trim(), id = selected.value, g = generation
   question.value = ''; messages.value.push({role: 'user', text}); asking.value = true; error.value = ''
+  const target = messages.value, requestToken = token.value
+  const pending = {role: 'assistant', text: '', streaming: true}
+  target.push(pending)
+  const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 180000)
+  streamStatus.value = '正在连接…'
   try {
-    const result = await api('/chat/ask', json({question: text, ...(id === 'all' ? {scope: 'all'} : {knowledge_base_id: id}), top_k: retrievalCount.value, expand_context: expandContext.value}))
-    if (g === generation) messages.value.push({role: 'assistant', text: result.answer, citations: result.citations, claims: result.claims, answerable: result.answerable, grounding_status: result.grounding_status, answer_source: result.answer_source, context_chunk_count: result.context_chunk_count, context_expanded: result.context_expanded})
+    const response = await fetch('/api/v1/chat/stream', {
+      ...json({question: text, ...(id === 'all' ? {scope: 'all'} : {knowledge_base_id: id}), top_k: retrievalCount.value, expand_context: expandContext.value}),
+      headers: {'Content-Type': 'application/json', ...(token.value ? {Authorization: 'Bearer ' + token.value} : {})},
+      signal: controller.signal
+    })
+    if (response.status === 401) {
+      conversations.clear(); persistence.clear(); messages.value = []
+      needsLogin.value = true; clearAccountSecrets()
+      throw new Error('登录已失效，请重新登录')
+    }
+    if (!response.ok) {
+      const data = await response.json()
+      throw new Error(typeof data.detail === 'string' ? data.detail : '请求失败，请检查输入')
+    }
+    await readAnswerStream(response.body, (event, data) => {
+      if (token.value !== requestToken || needsLogin.value || target.indexOf(pending) < 0) return
+      const current = target[target.indexOf(pending)]
+      if (event === 'status') streamStatus.value = data.message
+      if (event === 'progress') streamStatus.value = `模型生成中（${data.characters} 字符），完成后校验引用…`
+      if (event === 'delta') current.text += data.text
+      if (event === 'done') Object.assign(current, {text: data.answer, citations: data.citations, claims: data.claims, answerable: data.answerable, grounding_status: data.grounding_status, answer_source: data.answer_source, context_chunk_count: data.context_chunk_count, context_expanded: data.context_expanded, streaming: false})
+    })
   } catch (e) {
+    const index = target.indexOf(pending)
+    if (index !== -1) target.splice(index, 1)
     if (g === generation) { question.value = text; fail(e) }
-  } finally { asking.value = false; persistConversations() }
+  } finally { clearTimeout(timeout); asking.value = false; streamStatus.value = ''; persistConversations() }
 }
 /** 线上反馈：把用户评价连同 grounding_status 一起回传，补齐评测闭环的线上部分。 */
 async function sendFeedback(m, index, rating) {
@@ -892,7 +921,7 @@ onUnmounted(() => clearInterval(timer))
                   <p>{{c.content}}</p>
                 </details>
               </div>
-              <div v-if="m.role==='assistant'" class="feedback">
+              <div v-if="m.role==='assistant' && !m.streaming" class="feedback">
                 <template v-if="!m.feedback">
                   <button type="button" @click="sendFeedback(m,i,'helpful')">👍 有帮助</button>
                   <button type="button" @click="sendFeedback(m,i,'not_helpful')">👎 没帮助</button>
@@ -901,7 +930,7 @@ onUnmounted(() => clearInterval(timer))
               </div>
             </div>
           </article>
-          <div v-if="asking" class="thinking">✳ 正在检索文档并组织答案，首次加载可能较慢…</div>
+          <div v-if="asking" class="thinking">✳ {{streamStatus}}</div>
         </div>
         <form class="composer" @submit.prevent="ask">
           <textarea v-model="question" aria-label="输入问题" placeholder="输入你的问题，答案将附上原文来源…" maxlength="2000" :disabled="asking" @keydown.ctrl.enter.prevent="ask" @keydown.meta.enter.prevent="ask"></textarea>
