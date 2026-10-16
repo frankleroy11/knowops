@@ -13,7 +13,9 @@ flowchart TD
     PARSE --> SQL
     WORKER --> BGE[BGE-M3 编码]
     BGE --> MV[(Milvus 向量索引)]
-    API --> SEARCH[授权版本筛选与语义检索]
+    API --> FAQ[MySQL FAQ 优先匹配]
+    FAQ --> CACHE[Redis 精确请求缓存]
+    CACHE --> SEARCH[授权版本筛选与语义检索]
     SQL --> SEARCH
     MV --> SEARCH
     SEARCH --> CONTEXT[可选重排与相邻块扩展]
@@ -32,6 +34,7 @@ flowchart TD
 | ingestion | UTF-8 文本、Markdown 和可提取文本的 PDF；固定窗口与结构感知字符切分 |
 | retrieval | BGE-M3 与 Milvus 召回、SQL 版本预筛选及回表复核、可选本地重排和同版本邻块补全 |
 | chat | 单轮非流式问答、LangChain 生成编排、逐事实引用验证与证据不足拒答 |
+| faq | 人工维护带证据的标准问答、阈值匹配、Redis 精确请求缓存 |
 | feedback / audit | 回答反馈快照、租户范围审计查询与导出、待审查回归候选 |
 | health / system | 存活、依赖就绪、Worker 与任务状态检查 |
 
@@ -48,3 +51,5 @@ flowchart TD
 当前未接入知识图谱、关键词与向量混合召回、扫描件 OCR、流式输出或多轮问题改写。LangChain 只编排生成部分，权限和检索仍为自写业务代码。精确引用匹配不能证明语义正确；开发数据和失败案例见 `evals/`，不能称为独立盲测。
 
 密码默认使用 scrypt 摘要；本机根据演示要求启用了 `PASSWORD_STORAGE=plaintext`。它会在 `users.password_hash` 保存 `plaintext$原密码`，没有加密保护，历史摘要在成功登录后转换。公开仓库默认仍为 scrypt；数据库、原文件、账号凭据和 `.env` 不随代码上传。
+
+FAQ 命中和缓存命中均跳过 Qwen，权限、版本及来源限制见 [FAQ 与缓存说明](faq-cache.md)。本轮 FAQ 问题向量保存在 MySQL 做小规模扫描，Milvus 继续负责原文块检索。

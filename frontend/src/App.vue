@@ -1,4 +1,5 @@
 <script setup>
+import {readAnswerStream} from './stream.js'
 import {ref, computed, onMounted, onUnmounted, watch, nextTick} from 'vue'
 import {
   createConversationPersistence,
@@ -13,7 +14,8 @@ const METHOD_KEY = 'knowops.login_method'
 
 const kbs = ref([]), selected = ref('all'), docs = ref([]), tab = ref('chat')
 const name = ref(''), description = ref(''), creating = ref(false), showCreate = ref(false)
-const uploading = ref(false), asking = ref(false), expandContext = ref(false)
+const uploading = ref(false), asking = ref(false), expandContext = ref(false), retrievalCount = ref(3)
+const streamStatus = ref('')
 const question = ref(''), messages = ref([]), error = ref(''), notice = ref('')
 const page = ref(0), loading = ref(false), action = ref(null)
 
@@ -72,6 +74,44 @@ async function confirmDeleteDoc() {
     notice.value = result.file_cleanup_pending ? '文档已删除，部分文件等待存储回收。' : '文档及其全部版本、切片与向量已删除。'
   } catch (e) { fail(e) } finally { adminBusy.value = false }
 }
+// FAQ 只由管理员维护，答案必须附带当前有效原文证据。
+const faqs = ref([]), faqSources = ref([]), faqKb = ref(''), faqPage = ref(0), faqSourcePage = ref(0)
+const faqEditing = ref(null), faqBusy = ref(false)
+const emptyFaq = () => ({question:'', answer:'', quote:'', chunk_id:'', enabled:true})
+const faqForm = ref(emptyFaq())
+function resetFaq() { faqEditing.value=null; faqForm.value=emptyFaq() }
+async function loadFaqs() {
+  if (!faqKb.value) { faqs.value=[]; faqSources.value=[]; return }
+  faqBusy.value=true
+  try {
+    faqs.value=await api(`/admin/faqs?knowledge_base_id=${faqKb.value}&offset=${faqPage.value*50}`)
+    faqSources.value=await api(`/admin/faqs/sources?knowledge_base_id=${faqKb.value}&offset=${faqSourcePage.value*100}`)
+  } catch(e) { fail(e) } finally { faqBusy.value=false }
+}
+async function changeFaqKb() { faqPage.value=0; faqSourcePage.value=0; resetFaq(); await loadFaqs() }
+function selectFaqSource() {
+  const source=faqSources.value.find(s=>s.chunk_id===Number(faqForm.value.chunk_id))
+  faqForm.value.quote=source ? source.content.slice(0,1200) : ''
+}
+function editFaq(row) {
+  faqEditing.value=row.id
+  faqForm.value={question:row.question,answer:row.answer,quote:row.quote,chunk_id:row.chunk_id,enabled:row.enabled}
+}
+async function saveFaq() {
+  faqBusy.value=true
+  try {
+    const body={...faqForm.value,knowledge_base_id:Number(faqKb.value),chunk_id:Number(faqForm.value.chunk_id)}
+    await api(faqEditing.value?`/admin/faqs/${faqEditing.value}`:'/admin/faqs', {...json(body),method:faqEditing.value?'PUT':'POST'})
+    resetFaq(); await loadFaqs(); notice.value='标准问答已保存。请确认答案由所选原文直接支持。'
+  } catch(e) { fail(e) } finally { faqBusy.value=false }
+}
+async function deleteFaq(row) {
+  if (!window.confirm('删除这条标准问答？')) return
+  faqBusy.value=true
+  try { await api(`/admin/faqs/${row.id}`,{method:'DELETE'}); resetFaq(); await loadFaqs() }
+  catch(e) { fail(e) } finally { faqBusy.value=false }
+}
+
 const systemStatus = ref(null), systemLoading = ref(false), systemError = ref('')
 const systemLabels = {mysql:'MySQL',redis:'Redis',milvus:'Milvus',worker:'Worker',jobs:'文档任务'}
 const jobLabels = {pending:'等待处理',parsed:'解析完成',failed:'失败',indexing:'正在索引',indexed:'索引完成'}
@@ -168,6 +208,7 @@ function json(data) { return {method: 'POST', headers: {'Content-Type': 'applica
 function patch(data) { return {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)} }
 // 退出或会话过期时清除一次性凭据和密码表单，避免下一个账号看到残留。
 function clearAccountSecrets() {
+  faqs.value=[]; faqSources.value=[]; faqKb.value=''; resetFaq()
   issuedToken.value=''; passwordUser.value=null; adminPassword.value=''; adminPasswordConfirm.value=''; adminForm.value.password=''
 }
 function fail(e) { error.value = e.name === 'AbortError' ? '请求超时，请稍后重试' : e.message }
@@ -271,12 +312,39 @@ async function ask() {
   if (!question.value.trim() || asking.value || !selected.value) return
   const text = question.value.trim(), id = selected.value, g = generation
   question.value = ''; messages.value.push({role: 'user', text}); asking.value = true; error.value = ''
+  const target = messages.value, requestToken = token.value
+  const pending = {role: 'assistant', text: '', streaming: true}
+  target.push(pending)
+  const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 180000)
+  streamStatus.value = '正在连接…'
   try {
-    const result = await api('/chat/ask', json({question: text, ...(id === 'all' ? {scope: 'all'} : {knowledge_base_id: id}), top_k: 3, expand_context: expandContext.value}))
-    if (g === generation) messages.value.push({role: 'assistant', text: result.answer, citations: result.citations, claims: result.claims, answerable: result.answerable, grounding_status: result.grounding_status})
+    const response = await fetch('/api/v1/chat/stream', {
+      ...json({question: text, ...(id === 'all' ? {scope: 'all'} : {knowledge_base_id: id}), top_k: retrievalCount.value, expand_context: expandContext.value}),
+      headers: {'Content-Type': 'application/json', ...(token.value ? {Authorization: 'Bearer ' + token.value} : {})},
+      signal: controller.signal
+    })
+    if (response.status === 401) {
+      conversations.clear(); persistence.clear(); messages.value = []
+      needsLogin.value = true; clearAccountSecrets()
+      throw new Error('登录已失效，请重新登录')
+    }
+    if (!response.ok) {
+      const data = await response.json()
+      throw new Error(typeof data.detail === 'string' ? data.detail : '请求失败，请检查输入')
+    }
+    await readAnswerStream(response.body, (event, data) => {
+      if (token.value !== requestToken || needsLogin.value || target.indexOf(pending) < 0) return
+      const current = target[target.indexOf(pending)]
+      if (event === 'status') streamStatus.value = data.message
+      if (event === 'progress') streamStatus.value = `模型生成中（${data.characters} 字符），完成后校验引用…`
+      if (event === 'delta') current.text += data.text
+      if (event === 'done') Object.assign(current, {text: data.answer, citations: data.citations, claims: data.claims, answerable: data.answerable, grounding_status: data.grounding_status, answer_source: data.answer_source, context_chunk_count: data.context_chunk_count, context_expanded: data.context_expanded, streaming: false})
+    })
   } catch (e) {
+    const index = target.indexOf(pending)
+    if (index !== -1) target.splice(index, 1)
     if (g === generation) { question.value = text; fail(e) }
-  } finally { asking.value = false; persistConversations() }
+  } finally { clearTimeout(timeout); asking.value = false; streamStatus.value = ''; persistConversations() }
 }
 /** 线上反馈：把用户评价连同 grounding_status 一起回传，补齐评测闭环的线上部分。 */
 async function sendFeedback(m, index, rating) {
@@ -512,6 +580,7 @@ async function enterConsole(section = 'knowledge') {
   if (section === 'audit') { await loadTenants(); await loadAudit() }
   if (section === 'failures') await loadFailures()
   if (section === 'system' && me.value?.is_platform_admin) await loadSystemStatus()
+  if (section === 'faq') { await loadKB(); faqKb.value=faqKb.value || kbs.value[0]?.id || ''; await loadFaqs() }
   if (section === 'knowledge') await loadKB()
 }
 
@@ -763,6 +832,7 @@ onUnmounted(() => clearInterval(timer))
       </nav>
       <nav v-else class="topnav">
         <button :class="{chosen:consoleSection==='knowledge'}" @click="enterConsole('knowledge')">知识库</button>
+        <button :class="{chosen:consoleSection==='faq'}" @click="enterConsole('faq')">高频问答</button>
         <button :class="{chosen:consoleSection==='users'}" @click="enterConsole('users')">用户</button>
         <button v-if="me.is_platform_admin" :class="{chosen:consoleSection==='tenants'}" @click="enterConsole('tenants')">租户</button>
         <button v-if="me.is_platform_admin" :class="{chosen:consoleSection==='system'}" @click="enterConsole('system')">系统状态</button>
@@ -818,7 +888,10 @@ onUnmounted(() => clearInterval(timer))
       </section>
 
       <section v-else-if="tab==='chat'" class="chat">
+        <div class="retrieval-options">
+        <label class="context-option">召回片段数<select v-model.number="retrievalCount" :disabled="asking" aria-label="召回片段数"><option v-for="count in 8" :key="count" :value="count">{{count}} 段</option></select><small>默认 3 段，资料不全时可尝试 5 段</small></label>
         <label class="context-option"><input v-model="expandContext" type="checkbox" :disabled="asking">补充同文档资料<small>有助于查找前后条款，回答可能稍慢</small></label>
+        </div>
         <div class="conversation" aria-live="polite">
           <div v-if="!messages.length" class="welcome">
             <div class="hero-icon">✳</div>
@@ -827,6 +900,7 @@ onUnmounted(() => clearInterval(timer))
             <p>{{unified?'直接提问，系统从你有权访问的知识库检索，引用会标明所属知识库。':'向「'+kb.name+'」提问，答案会附上可核对的原文来源。'}}</p>
             <div class="suggestions">
               <button @click="question='在家办公如何连接公司内网？'">在家如何连接公司内网？ ↗</button>
+              <button @click="question='统一问答需要先选择知识库吗？'">统一问答需要先选择知识库吗？ ↗</button>
               <button v-if="canAuthor" @click="unified?showCreate=true:tab='docs'">{{unified?'创建知识库 ↗':'先上传一份文档 ↗'}}</button>
             </div>
             <small>每次提问独立检索；切换知识库会分别保留各自的问答记录。</small>
@@ -836,6 +910,8 @@ onUnmounted(() => clearInterval(timer))
             <div class="message-body">
               <b>{{m.role==='user'?'我的问题':'KnowOps'}}</b>
               <p>{{m.text}}</p>
+              <span v-if="m.answer_source" class="badge">{{({faq:'标准问答',cache:'历史答案缓存',rag:'知识库生成'})[m.answer_source]}}</span>
+              <span v-if="Number.isInteger(m.context_chunk_count)" class="badge">参考 {{m.context_chunk_count}} 段资料{{m.context_expanded ? ' · 已启用相邻补充' : ''}}</span>
               <span v-if="m.answerable===false" class="badge">资料不足</span>
               <div v-if="m.citations?.length" class="sources">
                 <div class="eyebrow">参考来源 · {{m.citations.length}}</div>
@@ -845,7 +921,7 @@ onUnmounted(() => clearInterval(timer))
                   <p>{{c.content}}</p>
                 </details>
               </div>
-              <div v-if="m.role==='assistant'" class="feedback">
+              <div v-if="m.role==='assistant' && !m.streaming" class="feedback">
                 <template v-if="!m.feedback">
                   <button type="button" @click="sendFeedback(m,i,'helpful')">👍 有帮助</button>
                   <button type="button" @click="sendFeedback(m,i,'not_helpful')">👎 没帮助</button>
@@ -854,7 +930,7 @@ onUnmounted(() => clearInterval(timer))
               </div>
             </div>
           </article>
-          <div v-if="asking" class="thinking">✳ 正在检索文档并组织答案，首次加载可能较慢…</div>
+          <div v-if="asking" class="thinking">✳ {{streamStatus}}</div>
         </div>
         <form class="composer" @submit.prevent="ask">
           <textarea v-model="question" aria-label="输入问题" placeholder="输入你的问题，答案将附上原文来源…" maxlength="2000" :disabled="asking" @keydown.ctrl.enter.prevent="ask" @keydown.meta.enter.prevent="ask"></textarea>
@@ -905,8 +981,8 @@ onUnmounted(() => clearInterval(timer))
       <div class="page-head">
         <div>
           <span class="eyebrow">ADMIN CONSOLE</span>
-          <h1>{{({knowledge:'知识库管理',users:'用户管理',tenants:'租户管理',audit:'审计日志',system:'系统状态',failures:'失败任务'})[consoleSection]}}</h1>
-          <p>{{({knowledge:'创建与维护知识库；进入某个知识库可上传资料、审核版本、分配成员。',users:'创建账号、调整角色与租户、签发或吊销 Token。',tenants:'平台级租户的新建与查看，所有数据按租户隔离。',audit:'谁在何时对哪个对象做了什么；可按租户筛选并导出 CSV。',system:'检查基础服务连接、Worker 响应和文档任务状态。',failures:'定位解析与索引失败，查看原因并按需重试。'})[consoleSection]}}</p>
+          <h1>{{({knowledge:'知识库管理',faq:'高频问答管理',users:'用户管理',tenants:'租户管理',audit:'审计日志',system:'系统状态',failures:'失败任务'})[consoleSection]}}</h1>
+          <p>{{({knowledge:'创建与维护知识库；进入某个知识库可上传资料、审核版本、分配成员。',faq:'维护有来源依据的标准问答，未匹配时自动进入知识库检索。',users:'创建账号、调整角色与租户、签发或吊销 Token。',tenants:'平台级租户的新建与查看，所有数据按租户隔离。',audit:'谁在何时对哪个对象做了什么；可按租户筛选并导出 CSV。',system:'检查基础服务连接、Worker 响应和文档任务状态。',failures:'定位解析与索引失败，查看原因并按需重试。'})[consoleSection]}}</p>
         </div>
       </div>
 
@@ -1036,6 +1112,27 @@ onUnmounted(() => clearInterval(timer))
           <tbody><tr v-for="d in failures" :key="d.version_id"><td>{{d.knowledge_base_name}}</td><td>{{d.filename}} · v{{d.version}}</td><td>{{d.stage==='parse'?'解析':'索引'}}</td><td>{{d.error || '未记录原因'}}</td><td class="row-actions"><button :disabled="adminBusy" @click="openFailure(d)">查看资料</button><button :disabled="adminBusy||action===d.id" @click="retry(d)">重试{{d.stage==='parse'?'解析':'索引'}}</button></td></tr></tbody></table>
           <div v-if="!failures.length" class="empty">当前页没有失败记录。</div></div>
         <div class="pagination"><button :disabled="adminBusy||failurePage===0" @click="failurePage--;loadFailures()">上一页</button><span>第 {{failurePage+1}} 页</span><button :disabled="adminBusy||failures.length<50" @click="failurePage++;loadFailures()">下一页</button></div>
+      </section>
+
+      <section v-else-if="consoleSection==='faq'" class="console" aria-label="高频问答管理">
+        <div class="console-toolbar">
+          <label>知识库 <select v-model="faqKb" :disabled="faqBusy" @change="changeFaqKb"><option value="">请选择</option><option v-for="item in kbs" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
+          <button :disabled="faqBusy||!faqKb" @click="loadFaqs">刷新</button>
+        </div>
+        <form v-if="faqKb" class="console-card" @submit.prevent="saveFaq">
+          <h3>{{faqEditing?'编辑标准问答':'新增标准问答'}}</h3>
+          <label>标准问题 <input v-model="faqForm.question" required maxlength="2000" placeholder="例如：午餐报销每天上限多少？"></label>
+          <label>标准答案 <textarea v-model="faqForm.answer" required maxlength="2000" placeholder="填写经管理员确认、可由原文直接支持的答案"></textarea></label>
+          <label>证据块 <select v-model="faqForm.chunk_id" required @change="selectFaqSource"><option value="">选择已发布且索引完成的原文</option><option v-for="source in faqSources" :key="source.chunk_id" :value="source.chunk_id">{{source.filename}} · 块 {{source.chunk_id}} · {{source.content.slice(0,60)}}</option><option v-if="faqEditing&&!faqSources.some(s=>s.chunk_id===faqForm.chunk_id)" :value="faqForm.chunk_id">当前绑定块 {{faqForm.chunk_id}}（需确认仍有效）</option></select></label>
+          <div class="pagination"><button type="button" :disabled="faqBusy||faqSourcePage===0" @click="faqSourcePage--;loadFaqs()">上一页证据</button><span>证据第 {{faqSourcePage+1}} 页</span><button type="button" :disabled="faqBusy||faqSources.length<100" @click="faqSourcePage++;loadFaqs()">下一页证据</button></div>
+          <label>逐字证据 <textarea v-model="faqForm.quote" required maxlength="1200" placeholder="从所选原文中摘录支持答案的连续内容"></textarea></label>
+          <label class="faq-enable"><input type="checkbox" v-model="faqForm.enabled">启用</label>
+          <p class="muted">保存前请人工核对答案。原文版本下架或切换后，这条问答不会继续命中。</p>
+          <button class="primary" :disabled="faqBusy">{{faqBusy?'处理中…':'保存标准问答'}}</button>
+          <button type="button" :disabled="faqBusy" @click="resetFaq">取消编辑</button>
+        </form>
+        <div class="table-wrap"><table><thead><tr><th>问题</th><th>答案</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="row in faqs" :key="row.id"><td>{{row.question}}</td><td>{{row.answer}}</td><td>{{!row.enabled?'已停用':(row.source_valid?'可匹配':'证据失效')}}</td><td class="row-actions"><button :disabled="faqBusy" @click="editFaq(row)">编辑</button><button :disabled="faqBusy" @click="deleteFaq(row)">删除</button></td></tr></tbody></table><div v-if="!faqs.length" class="empty">暂无标准问答。</div></div>
+        <div class="pagination"><button :disabled="faqBusy||faqPage===0" @click="faqPage--;loadFaqs()">上一页</button><span>第 {{faqPage+1}} 页</span><button :disabled="faqBusy||faqs.length<50" @click="faqPage++;loadFaqs()">下一页</button></div>
       </section>
 
       <section v-else-if="consoleSection==='system'" class="console" aria-label="系统状态">

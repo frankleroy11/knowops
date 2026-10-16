@@ -1,0 +1,179 @@
+{
+  "kind": "synthetic development acceptance",
+  "checks": [
+    "real_upload_index_faq_exact_and_semantic_without_llm",
+    "real_qwen_first_answer_then_redis_cache_hit",
+    "permission_revocation_blocks_cached_answer",
+    "version_invalidation_blocks_faq_and_cache"
+  ],
+  "responses": {
+    "exact": {
+      "answer": "每人每天最多报销 128 元。",
+      "answerable": true,
+      "citations": [
+        {
+          "source_id": 1,
+          "chunk_id": 796,
+          "version_id": 268,
+          "document_id": 259,
+          "knowledge_base_id": 44,
+          "knowledge_base_name": "faq-acceptance-1840ea9516bd",
+          "filename": "FAQ验收制度.txt",
+          "position": 0,
+          "page": null,
+          "content": "白鹭 FAQ 验收计划的午餐报销上限为每人每天 128 元，必须提交电子发票。"
+        }
+      ],
+      "claims": [
+        {
+          "text": "每人每天最多报销 128 元。",
+          "evidence": [
+            {
+              "source_id": 1,
+              "quote": "午餐报销上限为每人每天 128 元"
+            }
+          ]
+        }
+      ],
+      "grounding_status": "faq_reviewed",
+      "answer_source": "faq",
+      "faq_id": 3,
+      "faq_match": "exact",
+      "faq_score": 1.0,
+      "context_chunk_count": 1,
+      "context_expanded": false,
+      "cache_hit": false,
+      "timings_ms": {
+        "retrieval": 0,
+        "generation": 0,
+        "total": 9.87
+      }
+    },
+    "semantic": {
+      "answer": "每人每天最多报销 128 元。",
+      "answerable": true,
+      "citations": [
+        {
+          "source_id": 1,
+          "chunk_id": 796,
+          "version_id": 268,
+          "document_id": 259,
+          "knowledge_base_id": 44,
+          "knowledge_base_name": "faq-acceptance-1840ea9516bd",
+          "filename": "FAQ验收制度.txt",
+          "position": 0,
+          "page": null,
+          "content": "白鹭 FAQ 验收计划的午餐报销上限为每人每天 128 元，必须提交电子发票。"
+        }
+      ],
+      "claims": [
+        {
+          "text": "每人每天最多报销 128 元。",
+          "evidence": [
+            {
+              "source_id": 1,
+              "quote": "午餐报销上限为每人每天 128 元"
+            }
+          ]
+        }
+      ],
+      "grounding_status": "faq_reviewed",
+      "answer_source": "faq",
+      "faq_id": 3,
+      "faq_match": "semantic",
+      "faq_score": 0.997087,
+      "context_chunk_count": 1,
+      "context_expanded": false,
+      "cache_hit": false,
+      "timings_ms": {
+        "retrieval": 0,
+        "generation": 0,
+        "total": 29.01
+      }
+    },
+    "rag": {
+      "answer": "白鹭 FAQ 验收计划的午餐报销上限为每人每天 128 元。",
+      "answerable": true,
+      "claims": [
+        {
+          "text": "白鹭 FAQ 验收计划的午餐报销上限为每人每天 128 元。",
+          "evidence": [
+            {
+              "source_id": 1,
+              "quote": "白鹭 FAQ 验收计划的午餐报销上限为每人每天 128 元，必须提交电子发票。"
+            }
+          ]
+        }
+      ],
+      "source_id_corrections": [],
+      "grounding_status": "quotes_validated",
+      "citations": [
+        {
+          "source_id": 1,
+          "chunk_id": 796,
+          "score": 0.9214341044425964,
+          "document_id": 259,
+          "knowledge_base_id": 44,
+          "knowledge_base_name": "faq-acceptance-1840ea9516bd",
+          "filename": "FAQ验收制度.txt",
+          "version_id": 268,
+          "position": 0,
+          "page": null,
+          "content": "白鹭 FAQ 验收计划的午餐报销上限为每人每天 128 元，必须提交电子发票。"
+        }
+      ],
+      "context_chunk_count": 1,
+      "context_expanded": false,
+      "timings_ms": {
+        "retrieval": 469.05,
+        "generation": 2915.59,
+        "total": 3384.64
+      },
+      "answer_source": "rag",
+      "cache_hit": false
+    },
+    "cache": {
+      "answer": "白鹭 FAQ 验收计划的午餐报销上限为每人每天 128 元。",
+      "answerable": true,
+      "claims": [
+        {
+          "text": "白鹭 FAQ 验收计划的午餐报销上限为每人每天 128 元。",
+          "evidence": [
+            {
+              "source_id": 1,
+              "quote": "白鹭 FAQ 验收计划的午餐报销上限为每人每天 128 元，必须提交电子发票。"
+            }
+          ]
+        }
+      ],
+      "source_id_corrections": [],
+      "grounding_status": "quotes_validated",
+      "citations": [
+        {
+          "source_id": 1,
+          "chunk_id": 796,
+          "score": 0.9214341044425964,
+          "document_id": 259,
+          "knowledge_base_id": 44,
+          "knowledge_base_name": "faq-acceptance-1840ea9516bd",
+          "filename": "FAQ验收制度.txt",
+          "version_id": 268,
+          "position": 0,
+          "page": null,
+          "content": "白鹭 FAQ 验收计划的午餐报销上限为每人每天 128 元，必须提交电子发票。"
+        }
+      ],
+      "context_chunk_count": 1,
+      "context_expanded": false,
+      "timings_ms": {
+        "retrieval": 0,
+        "generation": 0,
+        "total": 13.39
+      },
+      "answer_source": "cache",
+      "cache_hit": true
+    }
+  },
+  "passed": true,
+  "temporary_rows_cleaned": true
+}

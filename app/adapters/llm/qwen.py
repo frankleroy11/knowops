@@ -4,6 +4,7 @@
 """Qwen generation through a LangChain Runnable sequence."""
 
 import json
+from contextvars import ContextVar
 
 import httpx
 from langchain_core.prompts import ChatPromptTemplate
@@ -11,6 +12,9 @@ from langchain_core.runnables import RunnableLambda
 from langsmith import tracing_context
 
 from app.core.config import get_settings
+
+# 流式请求通过上下文变量注入进度回调，普通请求继续使用原接口。
+STREAM_PROGRESS = ContextVar("qwen_stream_progress", default=None)
 
 
 class LLMUnavailable(RuntimeError):
@@ -62,6 +66,35 @@ def invoke_qwen(prompt) -> str:
         for message in prompt.to_messages()
     ]
     with httpx.Client(timeout=httpx.Timeout(60, connect=10)) as client:
+        progress = STREAM_PROGRESS.get()
+        if progress is not None:
+            content = ""
+            with client.stream(
+                "POST", s.llm_base_url.rstrip("/") + "/chat/completions",
+                headers=headers,
+                json={"model": s.llm_model, "temperature": 0, "max_tokens": 1200,
+                      "stream": True, "messages": messages},
+            ) as response:
+                response.raise_for_status()
+                finished = False
+                for line in response.iter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if payload == "[DONE]":
+                        finished = True
+                        break
+                    event = json.loads(payload)
+                    choices = event.get("choices", [])
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta", {}).get("content") or ""
+                    content += delta
+                    if delta:
+                        progress(len(content))
+                if not finished:
+                    raise ValueError("Incomplete model stream")
+            return content
         response = client.post(
             s.llm_base_url.rstrip("/") + "/chat/completions",
             headers=headers,

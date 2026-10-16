@@ -85,7 +85,7 @@ export function snapshotConversations(entries) {
     key,
     {
       question: String(conversation?.question ?? '').slice(0, MAX_DRAFT_CHARS),
-      messages: (conversation?.messages || []).slice(-MAX_MESSAGES_PER_SCOPE).map(trimMessage),
+      messages: (conversation?.messages || []).filter(message => !message?.streaming).slice(-MAX_MESSAGES_PER_SCOPE).map(trimMessage),
     },
   ])
 }

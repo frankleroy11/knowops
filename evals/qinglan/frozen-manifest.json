@@ -1,0 +1,14 @@
+{
+  "kind": "synthetic development set frozen before first retrieval; not independent blind evaluation",
+  "sha256": {
+    "corpus/01_巡检盒Q2规格与安全.md": "781a3485820c9ab7a49f283795460cb93e95b5482991f02479356f45390335aa",
+    "corpus/02_联网部署与离线同步.md": "b58d9115277a811c87574b27038df004d65f309b00889025aa7b39d99bc81a86",
+    "corpus/03_巡检任务与告警处理.md": "1b8c6ed4adf1c9d05fbf9a69376f58684061a26058a89c0964c78afc5782842e",
+    "corpus/04_服务等级与支持响应.md": "07aab9ad5bfbe1775e8ee53b62157f8c207bd9440c6127b5f3709022f2ddc13b",
+    "corpus/05_保修退换与耗材.md": "9d46b71bd9d1c6f4bf903ed9998492d3573a0114c3986d3ef0707a5020eb4d3c",
+    "corpus/06_现场差旅与费用报销.md": "59f620fba2948d123dc43fb0511c3f934056ea6c2f74a0b97267cb0f10768dd0",
+    "corpus/07_账号权限与交接.md": "4c6e5164fbc9ec9747884ca7a8928c8b37af3ff63d4a771ef716f1284bb972c2",
+    "corpus/08_数据保留导出与删除.md": "cb4e7a7f8e7f656ec24e74e5b664e581bc47109b40bb6a89517cc7dba0583366",
+    "questions.json": "6d16fcf5a52024305f23d37a9296aabe32e3994637e65abd488b6e95030ede81"
+  }
+}

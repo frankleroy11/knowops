@@ -293,6 +293,8 @@ label > input, label > textarea, label > select { margin-top: 6px; }
 .toolbar nav button { padding: 7px 12px; border-radius: 8px; color: var(--muted); font-weight: 550; }
 .toolbar nav button.chosen { background: var(--brand-soft); color: var(--brand); }
 
+.retrieval-options { display: flex; flex-wrap: wrap; gap: 10px; }
+.context-option select { width: auto; padding: 4px 8px; }
 .context-option {
   display: inline-flex;
   align-items: center;
