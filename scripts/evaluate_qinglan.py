@@ -12,7 +12,7 @@ import time
 import httpx
 from sqlalchemy import select
 
-from app.core.config import ROOT
+from app.core.config import ROOT, get_settings
 from app.db.session import SessionLocal
 from app.modules.auth.models import User
 from app.modules.knowledge.models import Chunk, DocumentVersion
