@@ -1,0 +1,366 @@
+{
+  "run": "release-a9c0429685b9",
+  "kind": "synthetic development regression",
+  "checks": [
+    "real_password_login_all_roles",
+    "platform_tenant_editor_viewer_and_cross_tenant_acl",
+    "real_upload_parse_embed_index_review_version_switch",
+    "failure_location_acl_retry_and_repaired_new_version",
+    "real_qwen_unified_qa_citations_and_feedback",
+    "real_document_delete_all_versions_vectors_files_and_neighbor_preservation"
+  ],
+  "questions": [
+    {
+      "question": "白鹭验收计划午餐报销每天上限多少元？",
+      "retrieved_hits": [
+        {
+          "chunk_id": 792,
+          "score": 0.8880012631416321,
+          "document_id": 255,
+          "knowledge_base_id": 42,
+          "knowledge_base_name": "release-a9c0429685b9",
+          "filename": "午餐制度.txt",
+          "version_id": 263,
+          "position": 0,
+          "page": null,
+          "content": "白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+        },
+        {
+          "chunk_id": 794,
+          "score": 0.6545079350471497,
+          "document_id": 257,
+          "knowledge_base_id": 42,
+          "knowledge_base_name": "release-a9c0429685b9",
+          "filename": "损坏文本.txt",
+          "version_id": 266,
+          "position": 0,
+          "page": null,
+          "content": "白鹭验收计划文档编码使用 UTF-8。"
+        },
+        {
+          "chunk_id": 793,
+          "score": 0.5564623475074768,
+          "document_id": 256,
+          "knowledge_base_id": 42,
+          "knowledge_base_name": "release-a9c0429685b9",
+          "filename": "VPN说明.txt",
+          "version_id": 264,
+          "position": 0,
+          "page": null,
+          "content": "白鹭验收计划的 VPN 服务使用 TCP 443 端口，连接时需要公司账号和动态验证码。"
+        }
+      ],
+      "expected_keyword": "128",
+      "passed_heuristic": true,
+      "citations_in_scope": true,
+      "http_total_ms": 3218.31,
+      "response": {
+        "answer": "白鹭验收计划午餐报销每天上限为128元。",
+        "answerable": true,
+        "claims": [
+          {
+            "text": "白鹭验收计划午餐报销每天上限为128元。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+              }
+            ]
+          }
+        ],
+        "source_id_corrections": [],
+        "grounding_status": "quotes_validated",
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 792,
+            "score": 0.8880012631416321,
+            "document_id": 255,
+            "knowledge_base_id": 42,
+            "knowledge_base_name": "release-a9c0429685b9",
+            "filename": "午餐制度.txt",
+            "version_id": 263,
+            "position": 0,
+            "page": null,
+            "content": "白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+          }
+        ],
+        "context_chunk_count": 3,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 304.61,
+          "generation": 2891.6,
+          "total": 3196.21
+        }
+      }
+    },
+    {
+      "question": "白鹭验收计划报销必须提交什么凭证？",
+      "retrieved_hits": [
+        {
+          "chunk_id": 794,
+          "score": 0.7072048783302307,
+          "document_id": 257,
+          "knowledge_base_id": 42,
+          "knowledge_base_name": "release-a9c0429685b9",
+          "filename": "损坏文本.txt",
+          "version_id": 266,
+          "position": 0,
+          "page": null,
+          "content": "白鹭验收计划文档编码使用 UTF-8。"
+        },
+        {
+          "chunk_id": 792,
+          "score": 0.7016175985336304,
+          "document_id": 255,
+          "knowledge_base_id": 42,
+          "knowledge_base_name": "release-a9c0429685b9",
+          "filename": "午餐制度.txt",
+          "version_id": 263,
+          "position": 0,
+          "page": null,
+          "content": "白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+        },
+        {
+          "chunk_id": 793,
+          "score": 0.6347029209136963,
+          "document_id": 256,
+          "knowledge_base_id": 42,
+          "knowledge_base_name": "release-a9c0429685b9",
+          "filename": "VPN说明.txt",
+          "version_id": 264,
+          "position": 0,
+          "page": null,
+          "content": "白鹭验收计划的 VPN 服务使用 TCP 443 端口，连接时需要公司账号和动态验证码。"
+        }
+      ],
+      "expected_keyword": "电子发票",
+      "passed_heuristic": false,
+      "citations_in_scope": true,
+      "http_total_ms": 1775.27,
+      "response": {
+        "answer": "现有知识库资料不足，无法回答这个问题。",
+        "answerable": false,
+        "citations": [],
+        "claims": [],
+        "grounding_status": "model_refused",
+        "context_chunk_count": 3,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 388.87,
+          "generation": 1379.03,
+          "total": 1767.9
+        }
+      }
+    },
+    {
+      "question": "白鹭验收计划 VPN 使用哪个 TCP 端口？",
+      "retrieved_hits": [
+        {
+          "chunk_id": 793,
+          "score": 0.8426200747489929,
+          "document_id": 256,
+          "knowledge_base_id": 42,
+          "knowledge_base_name": "release-a9c0429685b9",
+          "filename": "VPN说明.txt",
+          "version_id": 264,
+          "position": 0,
+          "page": null,
+          "content": "白鹭验收计划的 VPN 服务使用 TCP 443 端口，连接时需要公司账号和动态验证码。"
+        },
+        {
+          "chunk_id": 794,
+          "score": 0.708991289138794,
+          "document_id": 257,
+          "knowledge_base_id": 42,
+          "knowledge_base_name": "release-a9c0429685b9",
+          "filename": "损坏文本.txt",
+          "version_id": 266,
+          "position": 0,
+          "page": null,
+          "content": "白鹭验收计划文档编码使用 UTF-8。"
+        },
+        {
+          "chunk_id": 792,
+          "score": 0.5044447779655457,
+          "document_id": 255,
+          "knowledge_base_id": 42,
+          "knowledge_base_name": "release-a9c0429685b9",
+          "filename": "午餐制度.txt",
+          "version_id": 263,
+          "position": 0,
+          "page": null,
+          "content": "白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+        }
+      ],
+      "expected_keyword": "443",
+      "passed_heuristic": true,
+      "citations_in_scope": true,
+      "http_total_ms": 3626.3,
+      "response": {
+        "answer": "白鹭验收计划 VPN 使用 TCP 443 端口。",
+        "answerable": true,
+        "claims": [
+          {
+            "text": "白鹭验收计划 VPN 使用 TCP 443 端口。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "白鹭验收计划的 VPN 服务使用 TCP 443 端口，连接时需要公司账号和动态验证码。"
+              }
+            ]
+          }
+        ],
+        "source_id_corrections": [],
+        "grounding_status": "quotes_validated",
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 793,
+            "score": 0.8426200747489929,
+            "document_id": 256,
+            "knowledge_base_id": 42,
+            "knowledge_base_name": "release-a9c0429685b9",
+            "filename": "VPN说明.txt",
+            "version_id": 264,
+            "position": 0,
+            "page": null,
+            "content": "白鹭验收计划的 VPN 服务使用 TCP 443 端口，连接时需要公司账号和动态验证码。"
+          }
+        ],
+        "context_chunk_count": 3,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 390.89,
+          "generation": 3224.71,
+          "total": 3615.59
+        }
+      }
+    },
+    {
+      "question": "白鹭验收计划年终奖金是多少？",
+      "retrieved_hits": [
+        {
+          "chunk_id": 792,
+          "score": 0.6764904856681824,
+          "document_id": 255,
+          "knowledge_base_id": 42,
+          "knowledge_base_name": "release-a9c0429685b9",
+          "filename": "午餐制度.txt",
+          "version_id": 263,
+          "position": 0,
+          "page": null,
+          "content": "白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+        },
+        {
+          "chunk_id": 794,
+          "score": 0.6726008057594299,
+          "document_id": 257,
+          "knowledge_base_id": 42,
+          "knowledge_base_name": "release-a9c0429685b9",
+          "filename": "损坏文本.txt",
+          "version_id": 266,
+          "position": 0,
+          "page": null,
+          "content": "白鹭验收计划文档编码使用 UTF-8。"
+        },
+        {
+          "chunk_id": 793,
+          "score": 0.5556849241256714,
+          "document_id": 256,
+          "knowledge_base_id": 42,
+          "knowledge_base_name": "release-a9c0429685b9",
+          "filename": "VPN说明.txt",
+          "version_id": 264,
+          "position": 0,
+          "page": null,
+          "content": "白鹭验收计划的 VPN 服务使用 TCP 443 端口，连接时需要公司账号和动态验证码。"
+        }
+      ],
+      "expected_keyword": null,
+      "passed_heuristic": true,
+      "citations_in_scope": true,
+      "http_total_ms": 1573.16,
+      "response": {
+        "answer": "现有知识库资料不足，无法回答这个问题。",
+        "answerable": false,
+        "citations": [],
+        "claims": [],
+        "grounding_status": "model_refused",
+        "context_chunk_count": 3,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 384.27,
+          "generation": 1176.62,
+          "total": 1560.88
+        }
+      }
+    },
+    {
+      "question": "白鹭验收计划午餐上限和年终奖金分别是多少？",
+      "retrieved_hits": [
+        {
+          "chunk_id": 792,
+          "score": 0.7750665545463562,
+          "document_id": 255,
+          "knowledge_base_id": 42,
+          "knowledge_base_name": "release-a9c0429685b9",
+          "filename": "午餐制度.txt",
+          "version_id": 263,
+          "position": 0,
+          "page": null,
+          "content": "白鹭验收计划员工午餐报销上限为每人每天 128 元。必须提交电子发票。"
+        },
+        {
+          "chunk_id": 794,
+          "score": 0.6595643162727356,
+          "document_id": 257,
+          "knowledge_base_id": 42,
+          "knowledge_base_name": "release-a9c0429685b9",
+          "filename": "损坏文本.txt",
+          "version_id": 266,
+          "position": 0,
+          "page": null,
+          "content": "白鹭验收计划文档编码使用 UTF-8。"
+        },
+        {
+          "chunk_id": 793,
+          "score": 0.5432596802711487,
+          "document_id": 256,
+          "knowledge_base_id": 42,
+          "knowledge_base_name": "release-a9c0429685b9",
+          "filename": "VPN说明.txt",
+          "version_id": 264,
+          "position": 0,
+          "page": null,
+          "content": "白鹭验收计划的 VPN 服务使用 TCP 443 端口，连接时需要公司账号和动态验证码。"
+        }
+      ],
+      "expected_keyword": null,
+      "passed_heuristic": true,
+      "citations_in_scope": true,
+      "http_total_ms": 1760.83,
+      "response": {
+        "answer": "现有知识库资料不足，无法回答这个问题。",
+        "answerable": false,
+        "citations": [],
+        "claims": [],
+        "grounding_status": "model_refused",
+        "context_chunk_count": 3,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 379.02,
+          "generation": 1369.37,
+          "total": 1748.39
+        }
+      }
+    }
+  ],
+  "summary": {
+    "questions": 5,
+    "heuristic_passed": 4,
+    "citation_scope_passed": 5,
+    "semantic_human_review": "required; exact quote validation is not semantic proof"
+  },
+  "baseline_restored": true
+}

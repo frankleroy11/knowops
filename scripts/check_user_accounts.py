@@ -15,8 +15,9 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
+from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.main import app
 from app.modules.audit.models import AuditLog
@@ -91,6 +92,11 @@ def main():
                     "confirm_password": password,
                 },
             )
+            # 真正读取 MySQL 核对演示明文格式，不把密码写入公开报告。
+            if get_settings().password_storage == "plaintext":
+                with SessionLocal() as db:
+                    stored = db.scalar(select(User.password_hash).where(User.email == email))
+                    assert stored == "plaintext$" + password
             token = login(email)
             profile = call("GET", "/auth/me", token=token)
             assert profile["is_admin"] and not profile["is_platform_admin"]
@@ -139,6 +145,23 @@ def main():
             "PATCH", f"/admin/users/{data['user_ids'][0]}", 409, token=a, json={"is_active": False}
         )
         checks.append("member_password_reset_role_change_disable_and_reenable_revoke_sessions")
+        # 验证用户自助改密后旧会话失效，重新登录并核对当前存储模式。
+        current = login(email, changed)
+        new_password = "Self!9-" + secrets.token_hex(12)
+        call(
+            "POST",
+            "/auth/password",
+            token=current,
+            json={"current_password": changed, "new_password": new_password},
+        )
+        call("GET", "/auth/me", 401, token=current)
+        login(email, new_password)
+        if get_settings().password_storage == "plaintext":
+            with SessionLocal() as db:
+                stored = db.scalar(select(User.password_hash).where(User.email == email))
+                assert stored == "plaintext$" + new_password
+        changed = new_password
+        checks.append("self_password_change_revokes_session_and_storage_matches_config")
         checks.append("search_filter_pagination_and_self_admin_guard")
         data["credentials"]["member"] = {"email": email, "password": changed}
         save()
