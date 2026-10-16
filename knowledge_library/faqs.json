@@ -1,0 +1,23 @@
+[
+  {
+    "knowledge_base": "平台使用帮助",
+    "source": "knowledge_library/platform/统一问答使用指南.md",
+    "question": "统一问答需要先选择知识库吗？",
+    "answer": "不需要，直接提问即可；系统会从你有权访问的全部知识库中查找资料。",
+    "quote": "在“统一问答”窗口直接输入问题，系统会从当前账号有权访问的全部知识库中查找资料，不需要先判断问题属于哪个知识库。"
+  },
+  {
+    "knowledge_base": "平台使用帮助",
+    "source": "knowledge_library/platform/文档上传与知识库维护.md",
+    "question": "扫描版 PDF 可以直接上传并识别吗？",
+    "answer": "目前不支持扫描 PDF 的自动 OCR，需要先转换成可提取文本的文件。",
+    "quote": "仅含图片的扫描 PDF 当前不支持自动 OCR，需要先转换为可提取文本的文件。"
+  },
+  {
+    "knowledge_base": "平台使用帮助",
+    "source": "knowledge_library/platform/账号角色与标准问答管理.md",
+    "question": "普通用户可以上传文档和管理其他用户吗？",
+    "answer": "不可以。普通用户只能阅读已授权知识库、提问和提交反馈。",
+    "quote": "普通用户可以阅读已授权的知识库、在统一问答窗口提问并提交反馈，不能创建知识库、上传资料或管理其他用户。"
+  }
+]

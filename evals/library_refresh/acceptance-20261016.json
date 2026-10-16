@@ -1,0 +1,304 @@
+{
+  "kind": "business library organization; synthetic demonstration corpus",
+  "accounts": [
+    {
+      "role": "admin",
+      "knowledge_bases_visible": 7
+    },
+    {
+      "role": "admin",
+      "knowledge_bases_visible": 7
+    },
+    {
+      "role": "viewer",
+      "knowledge_bases_visible": 7
+    },
+    {
+      "role": "viewer",
+      "knowledge_bases_visible": 7
+    },
+    {
+      "role": "viewer",
+      "knowledge_bases_visible": 7
+    }
+  ],
+  "questions": [
+    {
+      "question": "统一问答需要先选择知识库吗？",
+      "response": {
+        "answer": "不需要，直接提问即可；系统会从你有权访问的全部知识库中查找资料。",
+        "answerable": true,
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 1261,
+            "version_id": 396,
+            "document_id": 387,
+            "knowledge_base_id": 51,
+            "knowledge_base_name": "平台使用帮助",
+            "filename": "统一问答使用指南.md",
+            "position": 0,
+            "page": null,
+            "content": "# KnowOps 统一问答使用指南\n\n## 如何提问\n\n在“统一问答”窗口直接输入问题，系统会从当前账号有权访问的全部知识库中查找资料，不需要先判断问题属于哪个知识库。需要限定范围时，在顶部选择一个知识库。\n\n问题建议包含适用对象、产品版本、城市和具体事项。例如“一线城市出差的市内交通费上限是多少”，比“报销多少”更明确。一次提问包含多个事项时，如果其中一个事项缺少资料，系统可能整体拒答。\n\n## 答案来源\n\n系统优先查找管理员维护的标准问答。FAQ 精确或语义匹配通过后直接返回标准答案；未匹配时检查短期答案缓存，仍未命中则进入知识库检索与模型生成流程。\n\n页面会显示“标准问答”“历史答案缓存”或“知识库生成”。这些标识说明回答来自哪条流程，不代表答案绝对正确。\n\n## 如何核对答案\n\n回答下方的“参考来源”会显示文档及所属知识库。展开来源，查看原文是否支持答案，尤其要核对适用对象、版本、金额和例外条件。\n\n原文没有提供信息时，系统会拒答。遇到拒答可补充问题范围，或请管理员上传缺失资料。点击“有帮助”或“没帮助”可以提交反馈；反馈不会自动成为标准答案。"
+          }
+        ],
+        "claims": [
+          {
+            "text": "不需要，直接提问即可；系统会从你有权访问的全部知识库中查找资料。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "在“统一问答”窗口直接输入问题，系统会从当前账号有权访问的全部知识库中查找资料，不需要先判断问题属于哪个知识库。"
+              }
+            ]
+          }
+        ],
+        "grounding_status": "faq_reviewed",
+        "answer_source": "faq",
+        "faq_id": 4,
+        "faq_match": "exact",
+        "faq_score": 1.0,
+        "context_chunk_count": 1,
+        "context_expanded": false,
+        "cache_hit": false,
+        "timings_ms": {
+          "retrieval": 0,
+          "generation": 0,
+          "total": 12.96
+        }
+      }
+    },
+    {
+      "question": "扫描版 PDF 可以直接上传并识别吗？",
+      "response": {
+        "answer": "目前不支持扫描 PDF 的自动 OCR，需要先转换成可提取文本的文件。",
+        "answerable": true,
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 1260,
+            "version_id": 395,
+            "document_id": 386,
+            "knowledge_base_id": 51,
+            "knowledge_base_name": "平台使用帮助",
+            "filename": "文档上传与知识库维护.md",
+            "position": 0,
+            "page": null,
+            "content": "# KnowOps 文档上传与知识库维护\n\n## 支持的文档\n\n支持 UTF-8 编码的 TXT、Markdown，以及能够提取文本的 PDF。仅含图片的扫描 PDF 当前不支持自动 OCR，需要先转换为可提取文本的文件。\n\n## 从上传到可以提问\n\n管理员进入知识库的资料页面上传文档。上传后会排队解析，Celery Worker 提取正文并切分文本，再用 BGE-M3 编码并写入 Milvus。\n\n“解析完成”不等于已经可以检索。文档还需要向量索引完成，且版本为当前有效版本、审核通过、文档未下架。开启审核的知识库中，新文档需要审核通过才能用于问答。\n\n## 资料质量\n\n建议一份文档围绕一个主题，明确标题、版本、适用范围和生效时间。表格应包含清晰表头；超长表格或跨页内容需要人工检查切分结果。不要把账号密码、API 密钥等凭据上传为普通知识资料。\n\n## 修改与删除\n\n资料更新时优先上传新版本，并核对审核和索引状态。版本切换后，绑定旧版本的标准问答不再命中。删除文档会清理其全部版本、文本块和向量，绑定文本块的 FAQ 也会删除。\n\n解析失败时先检查编码或 PDF 是否有文本；修正原文件后上传新版本。模型或 Milvus 不可用导致索引失败时，服务恢复后再重试索引。"
+          }
+        ],
+        "claims": [
+          {
+            "text": "目前不支持扫描 PDF 的自动 OCR，需要先转换成可提取文本的文件。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "仅含图片的扫描 PDF 当前不支持自动 OCR，需要先转换为可提取文本的文件。"
+              }
+            ]
+          }
+        ],
+        "grounding_status": "faq_reviewed",
+        "answer_source": "faq",
+        "faq_id": 5,
+        "faq_match": "exact",
+        "faq_score": 1.0,
+        "context_chunk_count": 1,
+        "context_expanded": false,
+        "cache_hit": false,
+        "timings_ms": {
+          "retrieval": 0,
+          "generation": 0,
+          "total": 7.12
+        }
+      }
+    },
+    {
+      "question": "普通用户可以上传文档和管理其他用户吗？",
+      "response": {
+        "answer": "不可以。普通用户只能阅读已授权知识库、提问和提交反馈。",
+        "answerable": true,
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 1262,
+            "version_id": 397,
+            "document_id": 388,
+            "knowledge_base_id": 51,
+            "knowledge_base_name": "平台使用帮助",
+            "filename": "账号角色与标准问答管理.md",
+            "position": 0,
+            "page": null,
+            "content": "# KnowOps 账号角色与标准问答管理\n\n## 用户与管理员\n\n普通用户可以阅读已授权的知识库、在统一问答窗口提问并提交反馈，不能创建知识库、上传资料或管理其他用户。\n\n租户管理员可以管理本空间的知识库和成员。平台管理员可以跨空间管理；平台管理员和租户管理员不是同一种权限范围。\n\n公开注册会创建独立演示空间，新账号不会自动加入其他空间。演示环境中已有普通用户的知识库访问权限由管理员维护。\n\n## 标准问答管理\n\n管理员进入“管理控制台 → 高频问答”，选择知识库，填写标准问题和答案，再选择当前有效且索引完成的证据块，并逐字摘录支持答案的原文。\n\n管理员必须人工确认标准答案由原文直接支持。保存后系统可以精确或语义匹配该问题；相似度阈值不等于正确率，问题有歧义时仍需核对资料。\n\n停用标准问答后，该条目不会继续作为 FAQ 命中。修改、下架或删除来源资料也可能让标准问答失效。需要调整时应选择新的有效证据并重新保存。\n\n## 登录异常\n\n邮箱或密码不正确时应核对账号信息。连续失败可能触发临时锁定。修改密码、调整角色或停用账号会使旧登录凭据失效，需要重新登录。"
+          }
+        ],
+        "claims": [
+          {
+            "text": "不可以。普通用户只能阅读已授权知识库、提问和提交反馈。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "普通用户可以阅读已授权的知识库、在统一问答窗口提问并提交反馈，不能创建知识库、上传资料或管理其他用户。"
+              }
+            ]
+          }
+        ],
+        "grounding_status": "faq_reviewed",
+        "answer_source": "faq",
+        "faq_id": 6,
+        "faq_match": "exact",
+        "faq_score": 1.0,
+        "context_chunk_count": 1,
+        "context_expanded": false,
+        "cache_hit": false,
+        "timings_ms": {
+          "retrieval": 0,
+          "generation": 0,
+          "total": 6.36
+        }
+      }
+    },
+    {
+      "question": "解析完成是否意味着文档已经可以检索？",
+      "response": {
+        "answer": "现有知识库资料不足，无法回答这个问题。",
+        "answerable": false,
+        "citations": [],
+        "claims": [],
+        "grounding_status": "invalid_evidence",
+        "context_chunk_count": 3,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 7180.44,
+          "generation": 3009.33,
+          "total": 10189.77
+        },
+        "answer_source": "rag",
+        "cache_hit": false
+      }
+    },
+    {
+      "question": "一线城市市内交通费单日上限是多少？",
+      "response": {
+        "answer": "一线城市市内交通费单日上限为120元。",
+        "answerable": true,
+        "claims": [
+          {
+            "text": "一线城市市内交通费单日上限为120元。",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "| 市内交通 | 单日不超过 120 元 | 据实报销，含出租车、网约车、地铁 |"
+              },
+              {
+                "source_id": 1,
+                "quote": "3.1 一线城市市内交通费单日上限为 120 元，超出部分自理；因客户临时改约产生的额外交通费，可凭说明申请额外报销，须部门负责人审批。"
+              },
+              {
+                "source_id": 2,
+                "quote": "问：一线城市打车一天最多报多少？\n答：市内交通单日不超过 120 元。"
+              }
+            ]
+          }
+        ],
+        "source_id_corrections": [],
+        "grounding_status": "quotes_validated",
+        "citations": [
+          {
+            "source_id": 1,
+            "chunk_id": 912,
+            "score": 0.7617449760437012,
+            "document_id": 293,
+            "knowledge_base_id": 46,
+            "knowledge_base_name": "财务与行政",
+            "filename": "差旅报销标准（一线城市）.md",
+            "version_id": 302,
+            "position": 1,
+            "page": null,
+            "content": "| 项目 | 标准 | 说明 |\n| --- | --- | --- |\n| 市内交通 | 单日不超过 120 元 | 据实报销，含出租车、网约车、地铁 |\n| 高铁/动车 | 二等座；单程超过 5 小时可乘一等座 | 需附行程单 |\n| 飞机 | 经济舱 | 提前 7 天订票优先 |\n| 机场/车站往返 | 据实报销 | 与市内交通合并计算单日上限 |\n\n3.1 一线城市市内交通费单日上限为 120 元，超出部分自理；因客户临时改约产生的额外交通费，可凭说明申请额外报销，须部门负责人审批。\n\n3.2 出差期间租车费用不纳入报销范围，特殊情况须由分管副总审批。\n\n## 四、伙食与商务费用\n\n4.1 一线城市出差补贴为 150 元/天，按《出差管理办法》（XQ-HR-009）计发，不再另报个人伙食费。\n\n4.2 商务宴请须事先审批，人均上限 150 元，报销时须附客户名单与事由说明。\n\n4.3 出差期间的个人消费（洗衣、健身、迷你吧、付费电视）一律不予报销。\n\n## 五、报销时限与材料\n\n5.1 差旅费报销须在出差结束后 15 个工作日内提交，最迟不超过费用发生之日起 30 个自然日。\n\n5.2 报销材料包括：出差申请单、发票原件或合规电子发票、行程单、住宿水单；缺失行程单的按票据金额的 80% 报销。\n\n5.3 发票抬头须为\"星桥科技有限公司\"，个人抬头发票不予受理。\n\n## 六、审批链\n\n6.1 单笔差旅报销金额在 5000 元以下的，由直属主管与部门负责人审批。\n\n6.2 单笔金额在 5000 元及以上、20000 元以下的，须增加财务负责人审批。\n\n6.3 单笔金额在 20000 元及以上的，须经分管副总与总经理审批。具体分档以《费用报销审批权限表》（XQ-FIN-101）为准。\n\n## 七、附则\n\n本标准由财务部负责解释，自 2026 年 1 月 1 日起执行。"
+          },
+          {
+            "source_id": 2,
+            "chunk_id": 914,
+            "score": 0.7488017678260803,
+            "document_id": 293,
+            "knowledge_base_id": 46,
+            "knowledge_base_name": "财务与行政",
+            "filename": "差旅报销标准（一线城市）.md",
+            "version_id": 302,
+            "position": 3,
+            "page": null,
+            "content": "## 十一、常见问题解答\n\n问：一线城市住宿一晚最多能报多少？\n答：600 元/晚，据实报销，超出部分自理。\n\n问：哪些城市算一线城市？\n答：仅北京、上海、广州、深圳四个城市。\n\n问：一线城市打车一天最多报多少？\n答：市内交通单日不超过 120 元。\n\n问：2024 版标准的 500 元上限还有效吗？\n答：已废止。自 2026 年 1 月 1 日起执行 600 元/晚的上限。\n\n问：两个人一起出差，住宿能报两间房吗？\n答：同性别同部门两人同行原则上合住标准间，按一间房的上限执行。"
+          }
+        ],
+        "context_chunk_count": 3,
+        "context_expanded": false,
+        "timings_ms": {
+          "retrieval": 336.42,
+          "generation": 5126.79,
+          "total": 5463.21
+        },
+        "answer_source": "rag",
+        "cache_hit": false
+      }
+    }
+  ],
+  "libraries": [
+    {
+      "id": 45,
+      "name": "人事与员工服务",
+      "documents": 29,
+      "chunks": 100
+    },
+    {
+      "id": 46,
+      "name": "财务与行政",
+      "documents": 13,
+      "chunks": 47
+    },
+    {
+      "id": 47,
+      "name": "IT 办公支持",
+      "documents": 25,
+      "chunks": 84
+    },
+    {
+      "id": 48,
+      "name": "账号与信息安全",
+      "documents": 17,
+      "chunks": 60
+    },
+    {
+      "id": 49,
+      "name": "产品使用指南",
+      "documents": 27,
+      "chunks": 112
+    },
+    {
+      "id": 50,
+      "name": "客户服务与工单",
+      "documents": 15,
+      "chunks": 60
+    },
+    {
+      "id": 51,
+      "name": "平台使用帮助",
+      "documents": 3,
+      "chunks": 3
+    }
+  ],
+  "parse_status": [
+    [
+      "parsed",
+      129
+    ]
+  ],
+  "index_status": [
+    [
+      "indexed",
+      129
+    ]
+  ],
+  "faq_count": 3,
+  "vector_count": 466
+}
