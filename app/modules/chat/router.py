@@ -9,8 +9,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.adapters.llm.qwen import LLMUnavailable, generate_grounded_answer
+from app.core.config import get_settings
 from app.db.deps import DB
 from app.modules.auth.deps import CurrentPrincipal
+from app.modules.faq import cache as answer_cache
+from app.modules.faq import service as faq_service
 from app.modules.retrieval.context import MAX_CONTEXT_CHUNKS, expand_neighbors
 from app.modules.retrieval.router import Query, search
 
@@ -152,6 +155,43 @@ def ask(body: AskRequest, db: DB, principal: CurrentPrincipal):
     if not body.question.strip():
         raise HTTPException(422, "问题不能为空")
     started = perf_counter()
+    settings = get_settings()
+    state = None
+    if settings.faq_enabled or settings.answer_cache_enabled:
+        state = faq_service.context(db, principal, body)
+        if not state["version_ids"]:
+            answer = refuse("no_context")
+            answer.update(
+                answer_source="rag",
+                cache_hit=False,
+                context_chunk_count=0,
+                context_expanded=body.expand_context,
+            )
+            answer["timings_ms"] = {
+                "retrieval": round((perf_counter() - started) * 1000, 2),
+                "generation": 0,
+                "total": round((perf_counter() - started) * 1000, 2),
+            }
+            return answer
+        faq = faq_service.match(body.question, state)
+        if faq:
+            faq["cache_hit"] = False
+            faq["timings_ms"] = {
+                "retrieval": 0,
+                "generation": 0,
+                "total": round((perf_counter() - started) * 1000, 2),
+            }
+            return faq
+        cached = answer_cache.read(state["cache_key"], state, db)
+        if cached:
+            cached["answer_source"] = "cache"
+            cached["cache_hit"] = True
+            cached["timings_ms"] = {
+                "retrieval": 0,
+                "generation": 0,
+                "total": round((perf_counter() - started) * 1000, 2),
+            }
+            return cached
     result = search(
         Query(
             query=body.question,
@@ -176,4 +216,8 @@ def ask(body: AskRequest, db: DB, principal: CurrentPrincipal):
         "generation": round((finished - retrieved) * 1000, 2),
         "total": round((finished - started) * 1000, 2),
     }
+    answer["answer_source"] = "rag"
+    answer["cache_hit"] = False
+    if state is not None:
+        answer_cache.write(state["cache_key"], answer)
     return answer

@@ -66,3 +66,7 @@ if frontend_dist.is_dir():
 from app.modules.system.router import router as system_router
 
 app.include_router(system_router, prefix="/api/v1")
+
+from app.modules.faq.router import router as faq_router
+
+app.include_router(faq_router, prefix="/api/v1")

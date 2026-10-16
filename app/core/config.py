@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     auth_mode: str = "off"
     public_registration_enabled: bool = False
 
+    # FAQ 余弦阈值只是演示起点，需用真实语料校准；相近候选冲突时回退 RAG。
+    faq_enabled: bool = True
+    faq_similarity_threshold: float = Field(default=0.85, ge=0, le=1)
+    faq_similarity_margin: float = Field(default=0.05, ge=0, le=1)
+    answer_cache_enabled: bool = True
+    answer_cache_ttl_seconds: int = Field(default=300, ge=1, le=86400)
+
     # --- OIDC 单点登录（可选）---
     oidc_enabled: bool = False
     oidc_issuer: str = ""
